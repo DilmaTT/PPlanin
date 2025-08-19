@@ -1,0 +1,184 @@
+/* Custom styles for React Calendar to match ShadCN theme */
+.react-calendar {
+  width: 100%;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  font-family: inherit;
+  line-height: 1.125em;
+  padding: 0.5rem;
+}
+
+.react-calendar--doubleView {
+  width: 700px;
+}
+
+.react-calendar--doubleView .react-calendar__viewContainer {
+  display: flex;
+  margin: -0.5em;
+}
+
+.react-calendar--doubleView .react-calendar__viewContainer > * {
+  width: 50%;
+  margin: 0.5em;
+}
+
+.react-calendar,
+.react-calendar *,
+.react-calendar *:before,
+.react-calendar *:after {
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+.react-calendar button {
+  margin: 0;
+  border: 0;
+  outline: none;
+  border-radius: var(--radius);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.react-calendar button:enabled:hover {
+  cursor: pointer;
+  background-color: hsl(var(--muted));
+}
+
+.react-calendar__navigation {
+  display: flex;
+  height: 44px;
+  margin-bottom: 1em;
+}
+
+.react-calendar__navigation button {
+  min-width: 44px;
+  background: none;
+  font-weight: 600;
+}
+
+.react-calendar__navigation button:disabled {
+  color: hsl(var(--muted-foreground));
+  background-color: transparent;
+}
+
+.react-calendar__navigation button:enabled:hover,
+.react-calendar__navigation button:enabled:focus {
+  background-color: hsl(var(--muted));
+}
+
+.react-calendar__month-view__weekdays {
+  text-align: center;
+  text-transform: uppercase;
+  font-weight: bold;
+  font-size: 0.75em;
+  color: hsl(var(--muted-foreground));
+}
+
+.react-calendar__month-view__weekdays__weekday {
+  padding: 0.5em;
+}
+
+.react-calendar__month-view__weekNumbers .react-calendar__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75em;
+  font-weight: bold;
+}
+
+.react-calendar__month-view__days__day--weekend {
+  color: hsl(var(--primary));
+}
+
+.react-calendar__month-view__days__day--neighboringMonth {
+  color: hsl(var(--muted-foreground));
+}
+
+.react-calendar__year-view .react-calendar__tile,
+.react-calendar__decade-view .react-calendar__tile,
+.react-calendar__century-view .react-calendar__tile {
+  padding: 2em 0.5em;
+}
+
+.react-calendar__tile {
+  max-width: 100%;
+  padding: 10px 6.6667px;
+  background: none;
+  text-align: center;
+  line-height: 16px;
+  height: 64px; /* Increased height */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.react-calendar__tile:disabled {
+  background-color: transparent;
+  color: hsl(var(--muted-foreground));
+}
+
+.react-calendar__tile:enabled:hover,
+.react-calendar__tile:enabled:focus {
+  background-color: hsl(var(--muted));
+}
+
+.react-calendar__tile--now {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.react-calendar__tile--now:enabled:hover,
+.react-calendar__tile--now:enabled:focus {
+  background: hsl(var(--accent) / 0.8);
+}
+
+.react-calendar__tile--hasActive {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.react-calendar__tile--hasActive:enabled:hover,
+.react-calendar__tile--hasActive:enabled:focus {
+  background: hsl(var(--primary) / 0.8);
+}
+
+.react-calendar__tile--active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.react-calendar__tile--active:enabled:hover,
+.react-calendar__tile--active:enabled:focus {
+  background: hsl(var(--primary));
+}
+
+.react-calendar--selectRange .react-calendar__tile--hover {
+  background-color: hsl(var(--muted));
+}
+
+.tile-plan {
+  font-size: 0.7rem;
+  margin-top: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background-color: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  white-space: nowrap;
+}
+
+/* Style for off-days */
+.off-day {
+  background-color: hsla(0, 62.8%, 30.6%, 0.3) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.off-day:hover {
+  background-color: hsla(0, 62.8%, 30.6%, 0.5) !important;
+}
+
+.react-calendar__tile--active.off-day {
+  background-color: hsla(0, 62.8%, 30.6%, 0.7) !important;
+}
