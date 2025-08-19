@@ -18,7 +18,6 @@ export type Session = {
 
 export type Settings = {
   theme: 'dark' | 'light' | 'system';
-  view: 'list' | 'calendar';
   splitPeriods: boolean;
   showNotes: boolean;
   showHandsPlayed: boolean;
