@@ -30,6 +30,7 @@ const SessionManager = ({}: SessionManagerProps) => {
   };
 
   const handleStop = () => {
+    console.log('Шаг 1: Кнопка "Остановить" нажата');
     stopSession();
   };
 

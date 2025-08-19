@@ -85,14 +85,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       return isWithinInterval(sessionDate, { start: startDate, end: endOfDay });
     });
     console.log('Шаг 2: Отфильтрованные сессии:', filteredSessions);
-
-    if (filteredSessions.length === 0) {
-      console.log("Нет данных для экспорта за выбранный период.");
-      onClose();
-      return;
-    }
     
     const activeColumns = columns.filter(col => selectedColumns[col.id]);
+    const headers = activeColumns.map(col => col.label); // Сформировать заголовки
 
     const formattedData = filteredSessions.map(session => {
       const row: Record<string, any> = {};
@@ -136,7 +131,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
     console.log('Шаг 3: Данные для экспорта:', formattedData);
 
-    const worksheet = XLSX.utils.json_to_sheet(formattedData);
+    const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers }); // Использовать сформированные заголовки
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sessions");
 

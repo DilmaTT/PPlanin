@@ -18,7 +18,7 @@ interface SessionContextType {
   startSession: () => void;
   stopSession: () => void;
   togglePeriod: (newType: 'play' | 'break' | 'select') => void;
-  completedSession: Session | null;
+  completedSession: Omit<Session, 'id' | 'notes' | 'handsPlayed'> | null; // Изменено: теперь содержит данные без ID, заметок и рук
   clearCompletedSession: () => void;
 }
 
@@ -29,11 +29,11 @@ interface SessionProviderProps {
 }
 
 export const SessionProvider = ({ children }: SessionProviderProps) => {
-  const { addSession } = useStorage();
+  const { addSession } = useStorage(); // addSession все еще нужен для модального окна
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPeriodType, setCurrentPeriodType] = useState<'play' | 'break' | 'select'>('play');
-  const [completedSession, setCompletedSession] = useState<Session | null>(null);
+  const [completedSession, setCompletedSession] = useState<Omit<Session, 'id' | 'notes' | 'handsPlayed'> | null>(null); // Изменено: теперь содержит данные без ID, заметок и рук
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -118,6 +118,7 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
   };
 
   const stopSession = () => {
+    console.log('Шаг 2: Функция stopSession в контексте вызвана');
     stopTimer();
     if (!activeSession) return;
 
@@ -141,8 +142,8 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
       periods: finalizedPeriods,
     };
 
-    const newSession = addSession(sessionData); // Add to storage (Supabase ID generated here)
-    setCompletedSession(newSession); // Set completed session for consumer
+    // Убеждаемся, что здесь нет вызовов addSession или updateSession
+    setCompletedSession(sessionData); // Устанавливаем данные сессии без ID, заметок и рук
     setActiveSession(null); // Reset active session state
 
     // Remove active session data from localStorage

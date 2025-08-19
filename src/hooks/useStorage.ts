@@ -102,6 +102,7 @@ export const useStorage = () => {
   }), [storedSettings]);
 
   const addSession = useCallback((newSession: Omit<Session, 'id' | 'notes' | 'handsPlayed'>) => {
+    console.log('Шаг 4: Функция addSession в хранилище вызвана');
     const sessionWithDefaults: Session = {
       ...newSession,
       id: newSession.overallStartTime,
@@ -113,6 +114,7 @@ export const useStorage = () => {
   }, [setSessions]);
 
   const updateSession = useCallback((sessionId: string, updatedData: Partial<Session>) => {
+    console.log('Шаг 4: Функция updateSession в хранилище вызвана');
     setSessions(prevSessions =>
       prevSessions.map(session =>
         session.id === sessionId ? { ...session, ...updatedData } : session

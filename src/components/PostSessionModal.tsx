@@ -17,30 +17,34 @@ import { Textarea } from './ui/textarea';
 interface PostSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  session: Session | null;
+  session: Omit<Session, 'id' | 'notes' | 'handsPlayed'> | null;
 }
 
 const PostSessionModal = ({ isOpen, onClose, session }: PostSessionModalProps) => {
-  const { settings, updateSession } = useStorage();
+  const { settings, addSession } = useStorage();
   const [notes, setNotes] = useState('');
   const [handsPlayed, setHandsPlayed] = useState('');
 
   useEffect(() => {
-    if (session) {
-      setNotes(session.notes || '');
-      setHandsPlayed(session.handsPlayed > 0 ? String(session.handsPlayed) : '');
-    }
+    setNotes('');
+    setHandsPlayed('');
   }, [session]);
 
   const handleSave = () => {
+    console.log('Шаг 3: Функция сохранения в модальном окне вызвана');
     if (!session) return;
 
     const handsPlayedNumber = parseInt(handsPlayed, 10);
     
-    updateSession(session.id, {
-      notes,
+    // Создаем полный объект сессии, объединяя данные из пропсов и введенные пользователем данные
+    const fullSession: Omit<Session, 'id'> = {
+      ...session,
+      notes: notes,
       handsPlayed: isNaN(handsPlayedNumber) ? 0 : handsPlayedNumber,
-    });
+    };
+
+    // Вызываем ТОЛЬКО addSession с полным объектом сессии
+    addSession(fullSession);
 
     onClose();
   };
