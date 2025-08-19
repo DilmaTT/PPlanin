@@ -7,7 +7,6 @@ const SETTINGS_STORAGE_KEY = 'poker-tracker-settings';
 
 const defaultSettings: Settings = {
   theme: 'dark',
-  view: 'list',
   splitPeriods: true,
   showNotes: true,
   showHandsPlayed: true,

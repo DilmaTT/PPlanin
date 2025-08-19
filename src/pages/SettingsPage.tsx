@@ -17,24 +17,6 @@ const SettingsPage = () => {
   return (
     <div className="container mx-auto max-w-2xl py-8 px-4">
       <div className="space-y-8">
-        <div className="p-6 border rounded-lg bg-card text-card-foreground">
-          <h2 className="text-xl font-semibold mb-4">Вид главного экрана</h2>
-          <RadioGroup
-            value={settings.view}
-            onValueChange={(value) => updateSettings({ view: value as 'list' | 'calendar' })}
-            className="space-y-2"
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="list" id="view-list" />
-              <Label htmlFor="view-list">Список</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="calendar" id="view-calendar" />
-              <Label htmlFor="view-calendar">Календарь</Label>
-            </div>
-          </RadioGroup>
-        </div>
-
         <Card>
           <CardHeader>
             <CardTitle>Настройки вида 'Список'</CardTitle>

@@ -1,17 +1,18 @@
-import { useRef, ChangeEvent } from 'react';
+import { useRef, ChangeEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useStorage } from '@/hooks/useStorage';
 import { useToast } from '@/hooks/use-toast';
 import type { Settings, Session } from '@/types';
-import { utils, writeFile, read } from 'xlsx';
-import { format, differenceInMinutes } from 'date-fns';
+import { read, utils } from 'xlsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ExportSessionsModal } from '@/components/ExportSessionsModal';
 
 const DataPage = () => {
-  const { settings, updateSettings, sessions, importSessions, resetAllData } = useStorage();
+  const { settings, updateSettings, importSessions, resetAllData } = useStorage();
   const { toast } = useToast();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const sessionsFileInputRef = useRef<HTMLInputElement>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const handleSettingsExport = () => {
     try {
@@ -94,46 +95,6 @@ const DataPage = () => {
     reader.readAsText(file);
   };
 
-  const handleSessionExport = () => {
-    if (sessions.length === 0) {
-      toast({
-        title: "Нет данных для экспорта",
-        description: "Сначала запишите хотя бы одну сессию.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const dataToExport = sessions.map(session => {
-      const startTime = new Date(session.overallStartTime);
-      const endTime = new Date(session.overallEndTime);
-
-      return {
-        'Дата': format(startTime, 'yyyy-MM-dd'),
-        'Время начала': format(startTime, 'HH:mm:ss'),
-        'Время окончания': format(endTime, 'HH:mm:ss'),
-        'Общая длительность (мин)': differenceInMinutes(endTime, startTime),
-        'Руки': session.handsPlayed,
-        'Заметки': session.notes,
-      };
-    });
-
-    const worksheet = utils.json_to_sheet(dataToExport);
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, 'Сессии');
-
-    worksheet['!cols'] = [
-      { wch: 12 }, // Дата
-      { wch: 15 }, // Время начала
-      { wch: 15 }, // Время окончания
-      { wch: 25 }, // Общая длительность (мин)
-      { wch: 10 }, // Руки
-      { wch: 50 }, // Заметки
-    ];
-
-    writeFile(workbook, 'poker-sessions.xlsx');
-  };
-
   const handleSessionImportClick = () => {
     sessionsFileInputRef.current?.click();
   };
@@ -209,68 +170,74 @@ const DataPage = () => {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">Управление данными</h1>
-      <div className="space-y-8 max-w-md">
-        <Card>
-          <CardHeader>
-            <CardTitle>Экспорт и Импорт Настроек</CardTitle>
-            <CardDescription>
-              Сохраните ваши текущие настройки в файл или загрузите их из ранее сохраненного файла.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4">
-              <Button onClick={handleSettingsExport}>Экспорт настроек</Button>
-              <Button variant="outline" onClick={handleSettingsImportClick}>Импорт настроек</Button>
-              <input
-                type="file"
-                ref={settingsFileInputRef}
-                onChange={handleSettingsFileChange}
-                accept=".json"
-                className="hidden"
-              />
-            </div>
-          </CardContent>
-        </Card>
+    <>
+      <div className="container mx-auto p-4">
+        <h1 className="text-3xl font-bold mb-6">Управление данными</h1>
+        <div className="space-y-8 max-w-md">
+          <Card>
+            <CardHeader>
+              <CardTitle>Экспорт и Импорт Настроек</CardTitle>
+              <CardDescription>
+                Сохраните ваши текущие настройки в файл или загрузите их из ранее сохраненного файла.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4">
+                <Button onClick={handleSettingsExport}>Экспорт настроек</Button>
+                <Button variant="outline" onClick={handleSettingsImportClick}>Импорт настроек</Button>
+                <input
+                  type="file"
+                  ref={settingsFileInputRef}
+                  onChange={handleSettingsFileChange}
+                  accept=".json"
+                  className="hidden"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Управление игровыми сессиями</CardTitle>
-            <CardDescription>
-              Сохраните все ваши игровые сессии в XLSX файл для анализа или загрузите их из файла.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-4">
-              <Button onClick={handleSessionExport}>Экспорт сессий (XLSX)</Button>
-              <Button variant="outline" onClick={handleSessionImportClick}>Импорт сессий (XLSX)</Button>
-              <input
-                type="file"
-                ref={sessionsFileInputRef}
-                onChange={handleSessionFileChange}
-                accept=".xlsx, .xls"
-                className="hidden"
-              />
-            </div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Управление игровыми сессиями</CardTitle>
+              <CardDescription>
+                Сохраните все ваши игровые сессии в XLSX файл для анализа или загрузите их из файла.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4">
+                <Button onClick={() => setIsExportModalOpen(true)}>Экспорт сессий (XLSX)</Button>
+                <Button variant="outline" onClick={handleSessionImportClick}>Импорт сессий (XLSX)</Button>
+                <input
+                  type="file"
+                  ref={sessionsFileInputRef}
+                  onChange={handleSessionFileChange}
+                  accept=".xlsx, .xls"
+                  className="hidden"
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="border-destructive/50">
-          <CardHeader>
-            <CardTitle className="text-destructive">Опасная зона</CardTitle>
-            <CardDescription>
-              Это действие полностью удалит все ваши сессии, планы и сбросит все настройки к значениям по умолчанию.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="destructive" onClick={handleResetData}>
-              Сбросить все данные
-            </Button>
-          </CardContent>
-        </Card>
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle className="text-destructive">Опасная зона</CardTitle>
+              <CardDescription>
+                Это действие полностью удалит все ваши сессии, планы и сбросит все настройки к значениям по умолчанию.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="destructive" onClick={handleResetData}>
+                Сбросить все данные
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+      <ExportSessionsModal 
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+      />
+    </>
   );
 };
 
