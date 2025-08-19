@@ -29,7 +29,7 @@ interface SessionProviderProps {
 }
 
 export const SessionProvider = ({ children }: SessionProviderProps) => {
-  const { addSession } = useStorage(); // addSession все еще нужен для модального окна
+  useStorage(); // addSession больше не используется напрямую здесь, но хук все еще должен быть вызван
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPeriodType, setCurrentPeriodType] = useState<'play' | 'break' | 'select'>('play');
