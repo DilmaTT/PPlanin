@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ExportSessionsModal } from '@/components/ExportSessionsModal';
 
 const DataPage = () => {
-  const { settings, updateSettings, importSessions, resetAllData } = useStorage();
+  const { sessions, settings, updateSettings, importSessions, resetAllData } = useStorage();
   const { toast } = useToast();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const sessionsFileInputRef = useRef<HTMLInputElement>(null);
@@ -236,6 +236,7 @@ const DataPage = () => {
       <ExportSessionsModal 
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
+        sessions={sessions}
       />
     </>
   );

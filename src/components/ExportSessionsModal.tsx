@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRange } from 'react-day-picker';
 import { subDays } from 'date-fns';
+import type { Session } from '@/types'; // Import Session type
 
 const columns = [
   { id: 'date', label: 'Дата' },
@@ -30,10 +31,11 @@ const columns = [
 interface ExportSessionsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  sessions: Session[]; // Add sessions prop
   // onExport: (options: ExportOptions) => void; // TODO: Implement export logic
 }
 
-export const ExportSessionsModal = ({ isOpen, onClose }: ExportSessionsModalProps) => {
+export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSessionsModalProps) => {
   const [selectedColumns, setSelectedColumns] = useState<Record<string, boolean>>(
     columns.reduce((acc, col) => ({ ...acc, [col.id]: true }), {})
   );
@@ -43,19 +45,28 @@ export const ExportSessionsModal = ({ isOpen, onClose }: ExportSessionsModalProp
     to: new Date(),
   });
 
+  const handleColumnChange = (columnId: string, checked: boolean) => {
+    setSelectedColumns((prev) => ({ ...prev, [columnId]: checked }));
+  };
+
   const handleExport = () => {
     // TODO: Implement actual export logic
-    // These variables are placeholders for debugging purposes.
-    // In a real scenario, 'sessions' would be fetched from storage,
-    // 'filteredSessions' would be the result of date filtering,
-    // and 'formattedData' would be the final transformed data for export.
-    const sessions: any[] = [];
     console.log('Шаг 1: Получено сессий:', sessions);
 
-    const filteredSessions: any[] = [];
+    // Placeholder for filtering logic
+    const filteredSessions: Session[] = sessions; // Use the sessions prop directly
     console.log('Шаг 2: Отфильтрованные сессии:', filteredSessions);
 
-    const formattedData: any[] = [];
+    // Placeholder for formatting logic
+    const formattedData: any[] = filteredSessions.map(session => ({
+      // Example: map session data to selected columns
+      date: session.overallStartTime,
+      sessionCount: 1, // Example value
+      totalTime: session.overallDuration,
+      hands: session.overallHandsPlayed,
+      notes: session.notes,
+      // ... other columns based on selectedColumns
+    }));
     console.log('Шаг 3: Данные для экспорта:', formattedData);
 
     console.log('Exporting with options:', {
