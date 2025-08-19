@@ -43,12 +43,21 @@ export const ExportSessionsModal = ({ isOpen, onClose }: ExportSessionsModalProp
     to: new Date(),
   });
 
-  const handleColumnChange = (columnId: string, checked: boolean) => {
-    setSelectedColumns((prev) => ({ ...prev, [columnId]: checked }));
-  };
-
   const handleExport = () => {
     // TODO: Implement actual export logic
+    // These variables are placeholders for debugging purposes.
+    // In a real scenario, 'sessions' would be fetched from storage,
+    // 'filteredSessions' would be the result of date filtering,
+    // and 'formattedData' would be the final transformed data for export.
+    const sessions: any[] = [];
+    console.log('Шаг 1: Получено сессий:', sessions);
+
+    const filteredSessions: any[] = [];
+    console.log('Шаг 2: Отфильтрованные сессии:', filteredSessions);
+
+    const formattedData: any[] = [];
+    console.log('Шаг 3: Данные для экспорта:', formattedData);
+
     console.log('Exporting with options:', {
       columns: Object.keys(selectedColumns).filter((key) => selectedColumns[key]),
       period,
