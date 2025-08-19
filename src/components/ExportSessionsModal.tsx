@@ -11,7 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Calendar } from '@/components/ui/calendar';
+import { Calendar }
+from '@/components/ui/calendar';
 import type { DateRange } from 'react-day-picker';
 import { subDays, subMonths, format, isWithinInterval } from 'date-fns';
 import type { Session, SessionPeriod } from '@/types';
@@ -44,7 +45,7 @@ const formatDuration = (seconds: number) => {
 interface ExportSessionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  sessions: Session[];
+  sessions: Session[]; // Теперь sessions приходят через пропсы
 }
 
 export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSessionsModalProps) => {
@@ -64,9 +65,8 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
   const handleExport = () => {
     console.log('Шаг 1: Получено сессий:', sessions);
 
-    // Step 1: Define the date range for filtering
-    let startDate: Date | undefined;
-    let endDate: Date | undefined = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
 
     if (period === 'week') {
       startDate = subDays(new Date(), 7);
@@ -74,71 +74,61 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       startDate = subMonths(new Date(), 1);
     } else if (period === 'custom' && date?.from) {
       startDate = date.from;
-      endDate = date.to || date.from; // Use 'to' if available, otherwise it's a single day
+      endDate = date.to || date.from;
     }
+    
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
 
-    // Step 2: Filter sessions based on the date range
     const filteredSessions = sessions.filter(session => {
-      if (!startDate || !endDate) return true; // If no range, include all
       const sessionDate = new Date(session.overallStartTime);
-      // Set time to end of day for endDate to include all sessions on that day
-      const endOfDay = new Date(endDate);
-      endOfDay.setHours(23, 59, 59, 999);
       return isWithinInterval(sessionDate, { start: startDate, end: endOfDay });
     });
     console.log('Шаг 2: Отфильтрованные сессии:', filteredSessions);
 
-    // Step 3: Format data for export based on selected columns
+    if (filteredSessions.length === 0) {
+      console.log("Нет данных для экспорта за выбранный период.");
+      onClose();
+      return;
+    }
+    
     const activeColumns = columns.filter(col => selectedColumns[col.id]);
 
     const formattedData = filteredSessions.map(session => {
       const row: Record<string, any> = {};
       
-      const calculateTimeForType = (type: SessionPeriod['type']) => {
-        return session.periods?.filter(p => p.type === type).reduce((acc, p) => {
-            if (p.startTime && p.endTime) {
-                return acc + (new Date(p.endTime).getTime() - new Date(p.startTime).getTime());
-            }
-            return acc;
-        }, 0) ?? 0;
+      const calculateDurationInSeconds = (type: SessionPeriod['type']) => {
+        return (session.periods?.filter(p => p.type === type)
+          .reduce((acc, p) => acc + (new Date(p.endTime).getTime() - new Date(p.startTime).getTime()), 0) ?? 0) / 1000;
       };
+      
+      const totalDurationInSeconds = (new Date(session.overallEndTime).getTime() - new Date(session.overallStartTime).getTime()) / 1000;
+      const playTimeInSeconds = calculateDurationInSeconds('play');
+      const playTimeInHours = playTimeInSeconds / 3600;
 
       activeColumns.forEach(col => {
         switch (col.id) {
           case 'date':
             row[col.label] = format(new Date(session.overallStartTime), 'yyyy-MM-dd HH:mm');
             break;
-          case 'sessionCount':
-            row[col.label] = 1;
-            break;
           case 'totalTime':
-            row[col.label] = formatDuration(session.overallDuration);
+            row[col.label] = formatDuration(totalDurationInSeconds);
             break;
           case 'playTime':
-            row[col.label] = formatDuration(calculateTimeForType('play') / 1000);
+            row[col.label] = formatDuration(playTimeInSeconds);
             break;
           case 'selectTime':
-             row[col.label] = formatDuration(calculateTimeForType('select') / 1000);
-            break;
-          case 'planHours':
-            row[col.label] = 'N/A';
-            break;
-          case 'planHands':
-            row[col.label] = 'N/A';
-            break;
-          case 'planRemaining':
-            row[col.label] = 'N/A';
+            row[col.label] = formatDuration(calculateDurationInSeconds('select'));
             break;
           case 'hands':
-            row[col.label] = session.overallHandsPlayed;
+            row[col.label] = session.handsPlayed;
             break;
           case 'handsPerHour':
-            const playTimeMs = calculateTimeForType('play');
-            const playTimeHours = playTimeMs / (1000 * 60 * 60);
-            row[col.label] = playTimeHours > 0 ? Math.round(session.overallHandsPlayed / playTimeHours) : 0;
+            row[col.label] = playTimeInHours > 0 ? Math.round((session.handsPlayed || 0) / playTimeInHours) : 0;
             break;
           default:
-            row[col.label] = '';
+            // You can add logic for other columns like plans here if needed
+            break;
         }
       });
       return row;
@@ -146,22 +136,13 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
     console.log('Шаг 3: Данные для экспорта:', formattedData);
 
-    if (formattedData.length === 0) {
-        console.log("Нет данных для экспорта за выбранный период.");
-        onClose();
-        return;
-    }
-
-    // Step 4: Create and download the Excel file
     const worksheet = XLSX.utils.json_to_sheet(formattedData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sessions");
 
-    // Generate buffer
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/octet-stream' });
 
-    // Create a temporary link and trigger download
     const url = URL.createObjectURL(data);
     const link = document.createElement('a');
     link.href = url;
