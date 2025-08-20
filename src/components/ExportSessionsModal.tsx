@@ -350,27 +350,28 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
 
         if (isHeaderRow) {
-          // Apply header style to all cells in the header row
-          cell.s = headerStyle;
+          cell.s = headerStyle; // Apply header style (bold and centered)
         } else {
-          // Data rows
+          // Apply data style to ALL data cells first (centered)
+          cell.s = dataStyle;
+          // Explicitly set type to string for all data cells to ensure consistent alignment
+          // This helps Excel apply string alignment even for values that might look like numbers/dates
+          cell.t = 's'; 
+
           if (isCurrentDayOff) {
-            if (C === 0) { // Date column for off-day
-              cell.s = dataStyle; // Keep existing date value, apply dataStyle
-            } else if (C >= mergeStartCol && C <= mergeEndCol) { // Cells within the merged range for off-day
-              cell.s = offDayMergedStyle;
-              if (C === mergeStartCol) { // Only set value for the first cell in the merged range
+            if (C === 0) {
+              // Date column for off-day, already has dataStyle and 's' type
+            } else if (C >= mergeStartCol && C <= mergeEndCol) {
+              // Cells within the merged range for off-day
+              cell.s = offDayMergedStyle; // Override with off-day style (light red background, centered)
+              if (C === mergeStartCol) {
                 cell.v = 'Выходной';
-                cell.t = 's'; // Set type to string
+                cell.t = 's'; // Re-affirm type for merged cell
               } else {
                 delete cell.v; // Clear content for other merged cells
               }
-            } else { // RawData column or any other column beyond visible merged range
-              cell.s = dataStyle;
             }
-          } else {
-            // Apply regular data style (centered) to all cells in non-off-day rows
-            cell.s = dataStyle;
+            // RawData column or any other column beyond visible merged range will retain dataStyle and 's' type
           }
         }
       }
