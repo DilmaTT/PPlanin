@@ -315,20 +315,6 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     const range = XLSX.utils.decode_range(worksheet['!ref'] as string);
     worksheet['!merges'] = worksheet['!merges'] || [];
 
-    // Define base styles
-    const baseAlignmentStyle = {
-      alignment: { horizontal: 'center', vertical: 'center' },
-      fill: { fgColor: { rgb: "FFFF0000" } } // Red background for all cells
-    };
-
-    const headerStyle = {
-      font: { bold: true }
-    };
-
-    const offDayMergedStyle = {
-      fill: { fgColor: { rgb: "FFC7CE" } } // Keep existing off-day color
-    };
-
     // Apply styles to all cells in the defined range
     for (let R = range.s.r; R <= range.e.r; ++R) {
       const isHeaderRow = (R === range.s.r);
@@ -357,18 +343,23 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         cell.t = 's';
         cell.z = '@';
 
-        // Apply base alignment and red background style
-        cell.s = cell.s || {}; // Ensure cell.s is an object
-        Object.assign(cell.s, baseAlignmentStyle); // Merge base alignment and red background style
+        // Initialize cell.s as a new object for each cell with base styles
+        cell.s = {
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: "FFFF0000" } }, // Default red background for all cells
+            font: {}, // Initialize font to an empty object
+            border: {} // Initialize border to an empty object if needed
+        };
 
         // Apply specific styles on top
         if (isHeaderRow) {
-          Object.assign(cell.s, headerStyle); // Add header font properties
+          cell.s.font.bold = true; // Set bold property on the font object
         } else if (isCurrentDayOff) {
           if (C === 0) {
             // Date column for off-day, already has base style
           } else if (C >= mergeStartCol && C <= mergeEndCol) {
-            Object.assign(cell.s, offDayMergedStyle); // Add off-day fill properties (overrides red for these cells)
+            // Override fill for off-day merged cells
+            cell.s.fill = { fgColor: { rgb: "FFC7CE" } }; // Off-day color
             if (C === mergeStartCol) {
               cell.v = 'Выходной';
             } else {
