@@ -300,7 +300,7 @@ import { useState } from 'react';
             }
           });
           // Add one space padding to each header
-          const paddedHeader = ` ${col.label} `; // Изменено: 1 пробел с каждой стороны
+          const paddedHeader = `  ${col.label}  `; // Изменено: 1 пробел с каждой стороны
           return { header: paddedHeader, key: col.id, width: maxWidth + 2 }; // Изменено: +2 для 2 пробелов
         });
 
@@ -330,7 +330,7 @@ import { useState } from 'react';
                 cell.fill = {
                   type: 'pattern',
                   pattern: 'solid',
-                  fgColor: { argb: 'FFC7CE' } // Light red background
+                  fgColor: { argb: 'ffe3ea' } // Light red background
                 };
               });
 
