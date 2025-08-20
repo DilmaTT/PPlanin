@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
 import { subDays, subMonths, format, startOfDay, eachDayOfInterval, endOfDay as getEndOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { useStorage } from '@/hooks/useStorage';
 import type { Session, SessionPeriod } from '@/types';
 
 const columns = [
@@ -53,6 +54,7 @@ interface ExportSessionsModalProps {
 }
 
 export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSessionsModalProps) => {
+  const { getPlanForDate } = useStorage();
   const [selectedColumns, setSelectedColumns] = useState<Record<string, boolean>>(
     columns.reduce((acc, col) => ({ ...acc, [col.id]: true }), {})
   );
@@ -127,16 +129,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       const daySessions = groupedByDay[dayKey] || [];
       const row: Record<string, any> = {};
 
-      const dateColumnFormat = buildDateFormatString();
-      const formattedDate = dateColumnFormat ? format(currentDate, dateColumnFormat, { locale: ru }) : format(currentDate, 'yyyy-MM-dd', { locale: ru });
-
-      if (daySessions.length === 0) {
-        // Handle empty day
-        if (selectedColumns.date) {
-          row[columns.find(c => c.id === 'date')!.label] = formattedDate;
-        }
-        return row;
-      }
+      const plan = getPlanForDate(currentDate);
+      const goalHours = plan?.hours || 0;
+      const goalHands = plan?.hands || 0;
 
       // Aggregate data for the day
       daySessions.sort((a, b) => new Date(a.overallStartTime).getTime() - new Date(b.overallStartTime).getTime());
@@ -160,6 +155,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
       const totalPlayTimeInHours = totalPlayTimeInSeconds / 3600;
 
+      const dateColumnFormat = buildDateFormatString();
+      const formattedDate = dateColumnFormat ? format(currentDate, dateColumnFormat, { locale: ru }) : format(currentDate, 'yyyy-MM-dd', { locale: ru });
+
       // 5. Format columns based on active selection
       activeColumns.forEach(col => {
         switch (col.id) {
@@ -170,6 +168,10 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             row[col.label] = daySessions.length;
             break;
           case 'sessionDateTime': {
+            if (daySessions.length === 0) {
+              row[col.label] = '-';
+              break;
+            }
             const firstSession = daySessions[0];
             const datePart = format(new Date(firstSession.overallStartTime), 'd MMMM yyyy', { locale: ru });
 
@@ -190,22 +192,42 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             break;
           }
           case 'totalTime':
-            row[col.label] = formatDuration(totalDurationInSeconds);
+            row[col.label] = daySessions.length > 0 ? formatDuration(totalDurationInSeconds) : '-';
             break;
           case 'playTime':
-            row[col.label] = formatDuration(totalPlayTimeInSeconds);
+            row[col.label] = daySessions.length > 0 ? formatDuration(totalPlayTimeInSeconds) : '-';
             break;
           case 'selectTime':
-            row[col.label] = formatDuration(totalSelectTimeInSeconds);
+            row[col.label] = daySessions.length > 0 ? formatDuration(totalSelectTimeInSeconds) : '-';
             break;
+          case 'planHours':
+            row[col.label] = goalHours > 0 ? goalHours : '-';
+            break;
+          case 'planHands':
+            row[col.label] = goalHands > 0 ? goalHands : '-';
+            break;
+          case 'planRemaining': {
+            if (goalHours > 0) {
+              const remainingSeconds = (goalHours * 3600) - totalPlayTimeInSeconds;
+              const sign = remainingSeconds < 0 ? '-' : '';
+              const absSeconds = Math.abs(remainingSeconds);
+              const h = Math.floor(absSeconds / 3600).toString().padStart(2, '0');
+              const m = Math.floor((absSeconds % 3600) / 60).toString().padStart(2, '0');
+              const s = Math.floor(absSeconds % 60).toString().padStart(2, '0');
+              row[col.label] = `${sign}${h}:${m}:${s}`;
+            } else {
+              row[col.label] = '-';
+            }
+            break;
+          }
           case 'hands':
-            row[col.label] = totalHandsPlayed;
+            row[col.label] = daySessions.length > 0 ? totalHandsPlayed : '-';
             break;
           case 'handsPerHour':
-            row[col.label] = totalPlayTimeInHours > 0 ? Math.round(totalHandsPlayed / totalPlayTimeInHours) : 0;
+            row[col.label] = totalPlayTimeInHours > 0 ? Math.round(totalHandsPlayed / totalPlayTimeInHours) : (daySessions.length > 0 ? 0 : '-');
             break;
           case 'notes':
-            row[col.label] = allNotes.join('; ');
+            row[col.label] = allNotes.join('; ') || (daySessions.length > 0 ? '' : '-');
             break;
           default:
             break;
@@ -216,6 +238,22 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
     // 6. Generate and download XLSX file
     const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers });
+
+    // Auto-fit column widths
+    const maxWidths = headers.map(header => header.length);
+    formattedData.forEach(row => {
+      headers.forEach((header, i) => {
+        const cellValue = row[header];
+        if (cellValue) {
+          const cellLength = String(cellValue).length;
+          if (cellLength > maxWidths[i]) {
+            maxWidths[i] = cellLength;
+          }
+        }
+      });
+    });
+    worksheet['!cols'] = maxWidths.map(width => ({ wch: width + 2 }));
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sessions");
 
