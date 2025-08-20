@@ -348,25 +348,27 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         if (isHeaderRow) {
           cell.s = headerStyle; // Apply header style (bold and centered)
         } else {
-          // Ensure cell.s exists and then set properties for data cells
-          cell.s = cell.s || {}; // Initialize style object if it doesn't exist
-          cell.s.alignment = { horizontal: 'center', vertical: 'center' };
+          // For data cells, ensure a fresh style object and explicit type/format
+          delete cell.s; // Explicitly remove any existing style object
+          cell.s = {
+            alignment: { horizontal: 'center', vertical: 'center' }
+          };
           cell.t = 's'; // Set type to string
           cell.z = '@'; // Set number format to text to ensure alignment is respected
 
           if (isCurrentDayOff) {
             if (C === 0) {
               // Date column for off-day, already centered and text formatted
+              // No additional style needed here, it already has the default data cell style
             } else if (C >= mergeStartCol && C <= mergeEndCol) {
               // Cells within the merged range for off-day
-              cell.s.fill = offDayMergedStyle.fill; // Apply fill from offDayMergedStyle
-              // Alignment is already set to center, no need to re-set
+              cell.s = { ...offDayMergedStyle }; // Assign the full style object including fill and alignment
               if (C === mergeStartCol) {
                 cell.v = 'Выходной';
                 cell.t = 's';
                 cell.z = '@';
               } else {
-                delete cell.v;
+                delete cell.v; // Clear value for merged cells beyond the first
               }
             }
             // RawData column or any other column beyond visible merged range will retain dataStyle and 's' type
