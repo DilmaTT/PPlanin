@@ -82,7 +82,7 @@ import { useState } from 'react';
         showMonth: true,
         showYear: true,
       });
-      const [planRemainingFormat, setPlanRemainingFormat] = useState('hm'); // Изменено с 'hms' на 'hm'
+      const [planRemainingFormat, setPlanRemainingFormat] = useState('hm');
 
       const handleColumnChange = (columnId: string, checked: boolean) => {
         setSelectedColumns((prev) => ({ ...prev, [columnId]: checked }));
@@ -268,14 +268,24 @@ import { useState } from 'react';
           // Add rawData column (hidden in Excel, used for logic)
           if (isOffDay(currentDate)) {
             row['rawData'] = JSON.stringify([]); // Empty array for off-days
-            // For off-days, clear all other visible columns except 'date'
-            columns.forEach(col => {
-              if (col.id !== 'date') {
-                row[col.id] = ''; // Clear other columns
-              }
+
+            // Clear all selected columns initially
+            columns.filter(col => selectedColumns[col.id]).forEach(col => {
+              row[col.id] = '';
             });
-            // Set the 'date' column to "Выходной" for off-days
-            row['date'] = 'Выходной';
+
+            // Find the ID of the first selected column that is NOT 'date'
+            // This will be the target for the "Выходной" text
+            const firstMergeColumnId = columns.find(col => col.id !== 'date' && selectedColumns[col.id])?.id;
+
+            if (firstMergeColumnId) {
+              // Place "Выходной" in the first cell of the merged range (second visible column)
+              row[firstMergeColumnId] = 'Выходной';
+            } else if (selectedColumns['date']) {
+              // Fallback: If only 'date' column is selected, and no other mergeable columns,
+              // then put "Выходной" in the 'date' column. No merge will happen in this case.
+              row['date'] = 'Выходной';
+            }
           } else {
             row['rawData'] = JSON.stringify(daySessions); // Full session data for active days
           }
@@ -300,8 +310,8 @@ import { useState } from 'react';
             }
           });
           // Add one space padding to each header
-          const paddedHeader = ` ${col.label} `; // Изменено: 1 пробел с каждой стороны
-          return { header: paddedHeader, key: col.id, width: maxWidth + 2 }; // Изменено: +2 для 2 пробелов
+          const paddedHeader = `  ${col.label}  `;
+          return { header: paddedHeader, key: col.id, width: maxWidth + 2 };
         });
 
         // Add the hidden rawData column for internal use
@@ -325,7 +335,12 @@ import { useState } from 'react';
           } else {
             // Check for "Выходной" (Day Off) rows using the 'date' column value
             const dateCell = row.getCell('date'); // Access by key 'date'
-            if (dateCell && dateCell.value === 'Выходной') {
+            // Now, check if the first cell of the merged range contains "Выходной"
+            const allDefinedColumns = worksheet.columns;
+            const firstMergeColumn = allDefinedColumns.find(col => col.key !== 'date' && selectedColumns[col.key]);
+            const firstMergeCell = firstMergeColumn ? row.getCell(firstMergeColumn.key) : undefined;
+
+            if ((dateCell && dateCell.value === 'Выходной') || (firstMergeCell && firstMergeCell.value === 'Выходной')) {
               row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = {
                   type: 'pattern',
@@ -335,7 +350,6 @@ import { useState } from 'react';
               });
 
               // Merge cells from the second column (B) to the last visible column
-              const allDefinedColumns = worksheet.columns;
               const rawDataColumnIndex = allDefinedColumns.findIndex(col => col.key === 'rawData');
               const lastVisibleColumnIndex = rawDataColumnIndex > -1 ? rawDataColumnIndex - 1 : allDefinedColumns.length - 1;
 
