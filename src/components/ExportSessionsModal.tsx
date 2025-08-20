@@ -318,6 +318,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     // Define base styles
     const baseAlignmentStyle = {
       alignment: { horizontal: 'center', vertical: 'center' },
+      fill: { fgColor: { rgb: "FFFF0000" } } // Red background for all cells
     };
 
     const headerStyle = {
@@ -325,7 +326,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     };
 
     const offDayMergedStyle = {
-      fill: { fgColor: { rgb: "FFC7CE" } }
+      fill: { fgColor: { rgb: "FFC7CE" } } // Keep existing off-day color
     };
 
     // Apply styles to all cells in the defined range
@@ -356,9 +357,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         cell.t = 's';
         cell.z = '@';
 
-        // Apply base alignment style
+        // Apply base alignment and red background style
         cell.s = cell.s || {}; // Ensure cell.s is an object
-        Object.assign(cell.s, baseAlignmentStyle); // Merge base alignment style
+        Object.assign(cell.s, baseAlignmentStyle); // Merge base alignment and red background style
 
         // Apply specific styles on top
         if (isHeaderRow) {
@@ -367,7 +368,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
           if (C === 0) {
             // Date column for off-day, already has base style
           } else if (C >= mergeStartCol && C <= mergeEndCol) {
-            Object.assign(cell.s, offDayMergedStyle); // Add off-day fill properties
+            Object.assign(cell.s, offDayMergedStyle); // Add off-day fill properties (overrides red for these cells)
             if (C === mergeStartCol) {
               cell.v = 'Выходной';
             } else {
