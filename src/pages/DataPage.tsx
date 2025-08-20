@@ -198,14 +198,14 @@ const DataPage = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Управление игровыми сессиями</CardTitle>
+              <CardTitle>Экспорт данных</CardTitle>
               <CardDescription>
                 Сохраните все ваши игровые сессии в XLSX файл для анализа или загрузите их из файла.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex gap-4">
-                <Button onClick={() => setIsExportModalOpen(true)}>Экспорт сессий (XLSX)</Button>
+                <Button onClick={() => setIsExportModalOpen(true)}>Экспорт данных (XLSX)</Button>
                 <Button variant="outline" onClick={handleSessionImportClick}>Импорт сессий (XLSX)</Button>
                 <input
                   type="file"

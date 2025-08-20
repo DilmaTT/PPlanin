@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
+import { Settings } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,15 +12,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Calendar }
-from '@/components/ui/calendar';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
 import { subDays, subMonths, format, isWithinInterval } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import type { Session, SessionPeriod } from '@/types';
 
 const columns = [
   { id: 'date', label: 'Дата' },
   { id: 'sessionCount', label: 'Кол-во сессий' },
+  { id: 'sessionDateTime', label: 'Дата сессий' },
   { id: 'totalTime', label: 'Общее время' },
   { id: 'playTime', label: 'Время игры' },
   { id: 'selectTime', label: 'Время селекта' },
@@ -28,6 +32,7 @@ const columns = [
   { id: 'planRemaining', label: 'Осталось по плану' },
   { id: 'hands', label: 'Руки' },
   { id: 'handsPerHour', label: 'Рук/час' },
+  { id: 'notes', label: 'Заметки' },
 ];
 
 // Helper function to format seconds into HH:MM:SS
@@ -41,11 +46,10 @@ const formatDuration = (seconds: number) => {
   return `${h}:${m}:${s}`;
 };
 
-
 interface ExportSessionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  sessions: Session[]; // Теперь sessions приходят через пропсы
+  sessions: Session[];
 }
 
 export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSessionsModalProps) => {
@@ -57,14 +61,34 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     from: subDays(new Date(), 7),
     to: new Date(),
   });
+  const [dateFormat, setDateFormat] = useState({
+    showDayOfWeek: false,
+    showMonth: true,
+    showYear: true,
+  });
 
   const handleColumnChange = (columnId: string, checked: boolean) => {
     setSelectedColumns((prev) => ({ ...prev, [columnId]: checked }));
   };
 
-  const handleExport = () => {
-    console.log('Шаг 1: Получено сессий:', sessions);
+  const handleDateFormatChange = (key: keyof typeof dateFormat, checked: boolean) => {
+    setDateFormat((prev) => ({ ...prev, [key]: checked }));
+  };
 
+  const buildDateFormatString = () => {
+    const formatParts: string[] = [];
+    if (dateFormat.showYear) formatParts.push('yyyy');
+    if (dateFormat.showMonth) formatParts.push('MM');
+    formatParts.push('dd');
+
+    let dateString = formatParts.join('-');
+    if (dateFormat.showDayOfWeek) {
+      dateString = `E, ${dateString}`;
+    }
+    return `${dateString} HH:mm`;
+  };
+
+  const handleExport = () => {
     let startDate = new Date();
     let endDate = new Date();
 
@@ -84,10 +108,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       const sessionDate = new Date(session.overallStartTime);
       return isWithinInterval(sessionDate, { start: startDate, end: endOfDay });
     });
-    console.log('Шаг 2: Отфильтрованные сессии:', filteredSessions);
     
     const activeColumns = columns.filter(col => selectedColumns[col.id]);
-    const headers = activeColumns.map(col => col.label); // Сформировать заголовки
+    const headers = activeColumns.map(col => col.label);
 
     const formattedData = filteredSessions.map(session => {
       const row: Record<string, any> = {};
@@ -104,8 +127,17 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       activeColumns.forEach(col => {
         switch (col.id) {
           case 'date':
-            row[col.label] = format(new Date(session.overallStartTime), 'yyyy-MM-dd HH:mm');
+            row[col.label] = format(new Date(session.overallStartTime), buildDateFormatString(), { locale: ru });
             break;
+          case 'sessionDateTime': {
+            const startTime = new Date(session.overallStartTime);
+            const endTime = new Date(session.overallEndTime);
+            const datePart = format(startTime, 'd MMMM yyyy', { locale: ru });
+            const startTimePart = format(startTime, 'HH:mm');
+            const endTimePart = format(endTime, 'HH:mm');
+            row[col.label] = `${datePart} ${startTimePart}-${endTimePart}`;
+            break;
+          }
           case 'totalTime':
             row[col.label] = formatDuration(totalDurationInSeconds);
             break;
@@ -121,6 +153,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
           case 'handsPerHour':
             row[col.label] = playTimeInHours > 0 ? Math.round((session.handsPlayed || 0) / playTimeInHours) : 0;
             break;
+          case 'notes':
+            row[col.label] = session.notes;
+            break;
           default:
             // You can add logic for other columns like plans here if needed
             break;
@@ -129,9 +164,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       return row;
     });
 
-    console.log('Шаг 3: Данные для экспорта:', formattedData);
-
-    const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers }); // Использовать сформированные заголовки
+    const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sessions");
 
@@ -154,7 +187,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Настройки экспорта сессий</DialogTitle>
+          <DialogTitle>Настройки экспорта данных</DialogTitle>
           <DialogDescription>
             Выберите колонки и период для формирования отчета.
           </DialogDescription>
@@ -164,18 +197,65 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             <h4 className="font-medium mb-4 text-foreground">Выбор колонок</h4>
             <div className="grid grid-cols-2 gap-4">
               {columns.map((column) => (
-                <div key={column.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={column.id}
-                    checked={selectedColumns[column.id]}
-                    onCheckedChange={(checked) => handleColumnChange(column.id, !!checked)}
-                  />
-                  <label
-                    htmlFor={column.id}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {column.label}
-                  </label>
+                <div key={column.id} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id={column.id}
+                      checked={selectedColumns[column.id]}
+                      onCheckedChange={(checked) => handleColumnChange(column.id, !!checked)}
+                    />
+                    <Label
+                      htmlFor={column.id}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {column.label}
+                    </Label>
+                  </div>
+                  {column.id === 'date' && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full">
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-4">
+                        <div className="grid gap-4">
+                          <div className="space-y-1">
+                            <h4 className="font-medium leading-none">Формат даты</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Настройте вид даты в отчете.
+                            </p>
+                          </div>
+                          <div className="grid gap-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="showDayOfWeek"
+                                checked={dateFormat.showDayOfWeek}
+                                onCheckedChange={(checked) => handleDateFormatChange('showDayOfWeek', !!checked)}
+                              />
+                              <Label htmlFor="showDayOfWeek">Показывать день недели</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="showMonth"
+                                checked={dateFormat.showMonth}
+                                onCheckedChange={(checked) => handleDateFormatChange('showMonth', !!checked)}
+                              />
+                              <Label htmlFor="showMonth">Показывать месяц</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="showYear"
+                                checked={dateFormat.showYear}
+                                onCheckedChange={(checked) => handleDateFormatChange('showYear', !!checked)}
+                              />
+                              <Label htmlFor="showYear">Показывать год</Label>
+                            </div>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </div>
               ))}
             </div>
@@ -185,15 +265,15 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             <RadioGroup defaultValue="week" value={period} onValueChange={setPeriod}>
               <div className="flex items-center space-x-2 mb-2">
                 <RadioGroupItem value="week" id="r1" />
-                <label htmlFor="r1" className="cursor-pointer">За неделю</label>
+                <Label htmlFor="r1" className="cursor-pointer">За неделю</Label>
               </div>
               <div className="flex items-center space-x-2 mb-2">
                 <RadioGroupItem value="month" id="r2" />
-                <label htmlFor="r2" className="cursor-pointer">За месяц</label>
+                <Label htmlFor="r2" className="cursor-pointer">За месяц</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="custom" id="r3" />
-                <label htmlFor="r3" className="cursor-pointer">Свой вариант</label>
+                <Label htmlFor="r3" className="cursor-pointer">Свой вариант</Label>
               </div>
             </RadioGroup>
             {period === 'custom' && (
