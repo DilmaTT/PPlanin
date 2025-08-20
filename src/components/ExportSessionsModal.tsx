@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { Settings } from 'lucide-react';
 import {
   Dialog,
@@ -106,14 +107,8 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     return dateString;
   };
 
-  const handleExport = () => {
-    // 1. Gather settings
-    const activeColumns = columns.filter(col => selectedColumns[col.id]);
-    // Add the rawData column internally for export, it will be hidden later
-    const allExportColumns = [...activeColumns, { id: 'rawData', label: 'Raw Data' }];
-    const headers = allExportColumns.map(col => col.label);
-
-    // 2. Determine date range
+  const handleExport = async () => {
+    // 1. Determine date range
     let startDate = new Date();
     let endDate = new Date();
     const today = new Date();
@@ -131,7 +126,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     
     const dateRange = eachDayOfInterval({ start: startOfDay(startDate), end: getEndOfDay(endDate) });
 
-    // 3. Group sessions by day for efficient lookup
+    // 2. Group sessions by day for efficient lookup
     const groupedByDay: Record<string, Session[]> = sessions.reduce((acc, session) => {
       const dayKey = format(new Date(session.overallStartTime), 'yyyy-MM-dd');
       if (!acc[dayKey]) {
@@ -141,11 +136,11 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       return acc;
     }, {} as Record<string, Session[]>);
 
-    // 4. Iterate through the date range and build data
+    // 3. Prepare data for ExcelJS
     const formattedData = dateRange.map(currentDate => {
       const dayKey = format(currentDate, 'yyyy-MM-dd');
       const daySessions = groupedByDay[dayKey] || [];
-      const row: Record<string, any> = {};
+      const row: Record<string, any> = {}; // Use column IDs as keys for ExcelJS
 
       const plan = getPlanForDate(currentDate);
       const goalHours = plan?.hours || 0;
@@ -176,18 +171,18 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       const dateColumnFormat = buildDateFormatString();
       const formattedDate = dateColumnFormat ? format(currentDate, dateColumnFormat, { locale: ru }) : format(currentDate, 'yyyy-MM-dd', { locale: ru });
 
-      // Populate visible columns
-      activeColumns.forEach(col => {
+      // Populate data using column IDs as keys
+      columns.forEach(col => {
         switch (col.id) {
           case 'date':
-            row[col.label] = formattedDate;
+            row[col.id] = formattedDate;
             break;
           case 'sessionCount':
-            row[col.label] = daySessions.length > 0 ? daySessions.length : '';
+            row[col.id] = daySessions.length > 0 ? daySessions.length : '';
             break;
           case 'sessionDateTime': {
             if (daySessions.length === 0) {
-              row[col.label] = '';
+              row[col.id] = '';
               break;
             }
             const firstSession = daySessions[0];
@@ -198,48 +193,48 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
               const endTime = new Date(firstSession.overallEndTime);
               const startTimePart = format(startTime, 'HH:mm');
               const endTimePart = format(endTime, 'HH:mm');
-              row[col.label] = `${datePart} ${startTimePart}-${endTimePart}`;
+              row[col.id] = `${datePart} ${startTimePart}-${endTimePart}`;
             } else {
               const timeRanges = daySessions.map(session => {
                 const startTime = format(new Date(session.overallStartTime), 'HH:mm');
                 const endTime = format(new Date(session.overallEndTime), 'HH:mm');
                 return `(${startTime}-${endTime})`;
               }).join(' ');
-              row[col.label] = `${datePart} ${timeRanges}`;
+              row[col.id] = `${datePart} ${timeRanges}`;
             }
             break;
           }
           case 'totalTime':
-            row[col.label] = daySessions.length > 0 ? formatDuration(totalDurationInSeconds) : '';
+            row[col.id] = daySessions.length > 0 ? formatDuration(totalDurationInSeconds) : '';
             break;
           case 'playTime':
-            row[col.label] = daySessions.length > 0 ? formatDuration(totalPlayTimeInSeconds) : '';
+            row[col.id] = daySessions.length > 0 ? formatDuration(totalPlayTimeInSeconds) : '';
             break;
           case 'selectTime':
-            row[col.label] = daySessions.length > 0 ? formatDuration(totalSelectTimeInSeconds) : '';
+            row[col.id] = daySessions.length > 0 ? formatDuration(totalSelectTimeInSeconds) : '';
             break;
           case 'planHours':
-            row[col.label] = goalHours > 0 ? goalHours : '';
+            row[col.id] = goalHours > 0 ? goalHours : '';
             break;
           case 'planHands':
-            row[col.label] = goalHands > 0 ? goalHands : '';
+            row[col.id] = goalHands > 0 ? goalHands : '';
             break;
           case 'planRemaining': {
             if (goalHours > 0) {
               const remainingSeconds = (goalHours * 3600) - totalPlayTimeInSeconds;
-              const sign = remainingSeconds < 0 ? '' : '';
+              const sign = remainingSeconds < 0 ? '-' : ''; // Show '-' for negative
               const absSeconds = Math.abs(remainingSeconds);
 
               switch (planRemainingFormat) {
                 case 'h': {
                   const h = Math.floor(absSeconds / 3600);
-                  row[col.label] = `${sign}${h}ч`;
+                  row[col.id] = `${sign}${h}ч`;
                   break;
                 }
                 case 'hm': {
                   const h = Math.floor(absSeconds / 3600);
                   const m = Math.floor((absSeconds % 3600) / 60);
-                  row[col.label] = `${sign}${h}ч ${m}мин`;
+                  row[col.id] = `${sign}${h}ч ${m}мин`;
                   break;
                 }
                 case 'hms':
@@ -247,54 +242,56 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
                   const h = Math.floor(absSeconds / 3600).toString().padStart(2, '0');
                   const m = Math.floor((absSeconds % 3600) / 60).toString().padStart(2, '0');
                   const s = Math.floor(absSeconds % 60).toString().padStart(2, '0');
-                  row[col.label] = `${sign}${h}:${m}:${s}`;
+                  row[col.id] = `${sign}${h}:${m}:${s}`;
                   break;
                 }
               }
             } else {
-              row[col.label] = '';
+              row[col.id] = '';
             }
             break;
           }
           case 'hands':
-            row[col.label] = daySessions.length > 0 ? totalHandsPlayed : '';
+            row[col.id] = daySessions.length > 0 ? totalHandsPlayed : '';
             break;
           case 'handsPerHour':
-            row[col.label] = totalPlayTimeInHours > 0 ? Math.round(totalHandsPlayed / totalPlayTimeInHours) : (daySessions.length > 0 ? 0 : '');
+            row[col.id] = totalPlayTimeInHours > 0 ? Math.round(totalHandsPlayed / totalPlayTimeInHours) : (daySessions.length > 0 ? 0 : '');
             break;
           case 'notes':
-            row[col.label] = allNotes.join('; ') || (daySessions.length > 0 ? '' : '');
+            row[col.id] = allNotes.join('; ') || (daySessions.length > 0 ? '' : '');
             break;
           default:
             break;
         }
       });
 
-      // Add rawData column
+      // Add rawData column (hidden in Excel, used for logic)
       if (isOffDay(currentDate)) {
-        row['Raw Data'] = JSON.stringify([]); // Empty array for off-days
-        // For off-days, clear all other visible columns except 'Дата'
-        activeColumns.forEach(col => {
+        row['rawData'] = JSON.stringify([]); // Empty array for off-days
+        // For off-days, clear all other visible columns except 'date'
+        columns.forEach(col => {
           if (col.id !== 'date') {
-            row[col.label] = ''; // Clear other columns, will be merged and overwritten by "Выходной"
+            row[col.id] = ''; // Clear other columns
           }
         });
+        // Set the 'date' column to "Выходной" for off-days
+        row['date'] = 'Выходной';
       } else {
-        row['Raw Data'] = JSON.stringify(daySessions); // Full session data for active days
+        row['rawData'] = JSON.stringify(daySessions); // Full session data for active days
       }
       
       return row;
     });
 
-    // 5. Create XLSX-sheet
-    const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers });
+    // 4. Create workbook and worksheet
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Sessions");
 
-    // 6. Format XLSX-sheet
-    // Auto-fit column widths for ALL columns (including rawData)
-    const colWidths = allExportColumns.map(col => {
+    // 5. Define columns for ExcelJS
+    const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
       let maxWidth = col.label.length; // Start with header length
       formattedData.forEach(row => {
-        const cellValue = row[col.label];
+        const cellValue = row[col.id]; // Access by ID
         if (cellValue) {
           const cellLength = String(cellValue).length;
           if (cellLength > maxWidth) {
@@ -302,100 +299,50 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
           }
         }
       });
-
-      const colDef: { wch: number; hidden?: boolean } = { wch: maxWidth + 2 };
-      if (col.id === 'rawData') {
-        colDef.hidden = true;
-      }
-      return colDef;
+      return { header: col.label, key: col.id, width: maxWidth + 2 };
     });
 
-    worksheet['!cols'] = colWidths;
+    // Add the hidden rawData column for internal use
+    excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10, hidden: true });
+    worksheet.columns = excelColumns;
 
-    const range = XLSX.utils.decode_range(worksheet['!ref'] as string);
-    worksheet['!merges'] = worksheet['!merges'] || [];
+    // 6. Add data to worksheet
+    worksheet.addRows(formattedData);
 
-    // Apply styles to all cells in the defined range
-    for (let R = range.s.r; R <= range.e.r; ++R) {
-      const isHeaderRow = (R === range.s.r);
-      const currentDate = isHeaderRow ? null : dateRange[R - (range.s.r + 1)];
-      const isCurrentDayOff = currentDate ? isOffDay(currentDate) : false;
+    // 7. Apply styles
+    worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      // Apply center alignment to all cells
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
 
-      // Determine merge range for off-days
-      const mergeStartCol = 1; // B column (Кол-во сессий)
-      const mergeEndCol = activeColumns.length - 1; // Last visible column index (excluding rawData)
-
-      if (isCurrentDayOff && mergeEndCol >= mergeStartCol) {
-        // Add merge for off-day row
-        worksheet['!merges'].push({ s: { r: R, c: mergeStartCol }, e: { r: R, c: mergeEndCol } });
-      }
-
-      for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-        const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
-
-        // Ensure cell value exists, even if empty, for style application
-        // This is crucial for styles to apply to truly empty cells
-        if (cell.v === undefined || cell.v === null) {
-            cell.v = '';
-        }
-
-        // Initialize cell.s with base styles first
-        cell.s = {
-            alignment: { horizontal: 'center', vertical: 'center' },
-            fill: { fgColor: { rgb: "FFFF0000" } }, // Red background
-            font: {
-                name: 'Arial',
-                sz: 14, // Larger font size
-                color: { rgb: "FF0000FF" }, // Blue font color
-                bold: true // Bold text
-            },
-            border: {
-                top: { style: "thin", color: { rgb: "FF000000" } },
-                bottom: { style: "thin", color: { rgb: "FF000000" } },
-                left: { style: "thin", color: { rgb: "FF000000" } },
-                right: { style: "thin", color: { rgb: "FF000000" } }
-            }
-        };
-
-        // Explicitly set type and format to string for all cells
-        cell.t = 's';
-        cell.z = '@';
-
-        // Apply specific styles on top
-        if (isHeaderRow) {
-          cell.s.font.bold = true; // Set bold property on the font object
-          cell.s.font.color = { rgb: "FF000000" }; // Black font for headers
-        } else if (isCurrentDayOff) {
-          if (C === 0) {
-            // Date column for off-day, already has base style
-          } else if (C >= mergeStartCol && C <= mergeEndCol) {
-            // Override fill for off-day merged cells
-            cell.s.fill = { fgColor: { rgb: "FFC7CE" } }; // Off-day color
-            if (C === mergeStartCol) {
-              cell.v = 'Выходной';
-            } else {
-              delete cell.v; // Clear value for merged cells beyond the first
-            }
-          }
+      // Bold headers (first row)
+      if (rowNumber === 1) {
+        row.font = { bold: true };
+      } else {
+        // Check for "Выходной" (Day Off) rows using the 'date' column value
+        const dateCell = row.getCell('date'); // Access by key 'date'
+        if (dateCell && dateCell.value === 'Выходной') {
+          row.eachCell({ includeEmpty: true }, (cell) => {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFC7CE' } // Light red background
+            };
+          });
         }
       }
+    });
+
+    // 8. Generate and download the file
+    try {
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      saveAs(blob, 'poker-sessions.xlsx');
+    } catch (error) {
+      console.error("Error exporting Excel file:", error);
+      // Optionally, show a user-friendly error message
     }
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Sessions");
-
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const data = new Blob([excelBuffer], { type: 'application/octet-stream' });
-
-    const url = URL.createObjectURL(data);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'poker-sessions.xlsx';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
 
     onClose();
   };
