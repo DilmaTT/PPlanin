@@ -128,14 +128,11 @@ import { useState } from 'react';
 
         // 2. Group sessions by day for efficient lookup
         const groupedByDay: Record<string, Session[]> = sessions.reduce((acc, session) => {
-          // Ensure overallStartTime is not null/undefined before formatting
-          if (session.overallStartTime) {
-            const dayKey = format(new Date(session.overallStartTime), 'yyyy-MM-dd');
-            if (!acc[dayKey]) {
-              acc[dayKey] = [];
-            }
-            acc[dayKey].push(session);
+          const dayKey = format(new Date(session.overallStartTime), 'yyyy-MM-dd');
+          if (!acc[dayKey]) {
+            acc[dayKey] = [];
           }
+          acc[dayKey].push(session);
           return acc;
         }, {} as Record<string, Session[]>);
 
@@ -150,11 +147,7 @@ import { useState } from 'react';
           const goalHands = plan?.hands || 0;
 
           // Aggregate data for the day
-          daySessions.sort((a, b) => {
-            const timeA = a.overallStartTime ? new Date(a.overallStartTime).getTime() : 0;
-            const timeB = b.overallStartTime ? new Date(b.overallStartTime).getTime() : 0;
-            return timeA - timeB;
-          });
+          daySessions.sort((a, b) => new Date(a.overallStartTime).getTime() - new Date(b.overallStartTime).getTime());
 
           let totalDurationInSeconds = 0;
           let totalPlayTimeInSeconds = 0;
@@ -163,24 +156,10 @@ import { useState } from 'react';
           const allNotes: string[] = [];
 
           daySessions.forEach(session => {
-            const sessionStartTime = session.overallStartTime ? new Date(session.overallStartTime) : null;
-            const sessionEndTime = session.overallEndTime ? new Date(session.overallEndTime) : null;
-
-            if (sessionStartTime && sessionEndTime && !isNaN(sessionStartTime.getTime()) && !isNaN(sessionEndTime.getTime())) {
-              totalDurationInSeconds += (sessionEndTime.getTime() - sessionStartTime.getTime()) / 1000;
-            }
-
-            const calculateDurationInSeconds = (type: SessionPeriod['type']) => {
-              return (session.periods?.filter(p => p.type === type)
-                .reduce((acc, p) => {
-                  const periodStartTime = p.startTime ? new Date(p.startTime) : null;
-                  const periodEndTime = p.endTime ? new Date(p.endTime) : null;
-                  if (periodStartTime && periodEndTime && !isNaN(periodStartTime.getTime()) && !isNaN(periodEndTime.getTime())) {
-                    return acc + (periodEndTime.getTime() - periodStartTime.getTime());
-                  }
-                  return acc;
-                }, 0) ?? 0) / 1000;
-            };
+            totalDurationInSeconds += (new Date(session.overallEndTime).getTime() - new Date(session.overallStartTime).getTime()) / 1000;
+            const calculateDurationInSeconds = (type: SessionPeriod['type']) =>
+              (session.periods?.filter(p => p.type === type)
+                .reduce((acc, p) => acc + (new Date(p.endTime).getTime() - new Date(p.startTime).getTime()), 0) ?? 0) / 1000;
             totalPlayTimeInSeconds += calculateDurationInSeconds('play');
             totalSelectTimeInSeconds += calculateDurationInSeconds('select');
             totalHandsPlayed += session.handsPlayed || 0;
@@ -207,22 +186,19 @@ import { useState } from 'react';
                   break;
                 }
                 const firstSession = daySessions[0];
-                // Ensure firstSession.overallStartTime is not undefined before using it
-                const datePart = firstSession.overallStartTime ? format(new Date(firstSession.overallStartTime), 'd MMMM yyyy', { locale: ru }) : '';
+                const datePart = format(new Date(firstSession.overallStartTime), 'd MMMM yyyy', { locale: ru });
 
                 if (daySessions.length === 1) {
-                  const startTime = firstSession.overallStartTime ? new Date(firstSession.overallStartTime) : undefined;
-                  const endTime = firstSession.overallEndTime ? new Date(firstSession.overallEndTime) : undefined;
-                  const startTimePart = startTime && !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : '';
-                  const endTimePart = endTime && !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : '';
+                  const startTime = new Date(firstSession.overallStartTime);
+                  const endTime = new Date(firstSession.overallEndTime);
+                  const startTimePart = format(startTime, 'HH:mm');
+                  const endTimePart = format(endTime, 'HH:mm');
                   row[col.id] = `${datePart} ${startTimePart}-${endTimePart}`;
                 } else {
                   const timeRanges = daySessions.map(session => {
-                    const startTime = session.overallStartTime ? new Date(session.overallStartTime) : undefined;
-                    const endTime = session.overallEndTime ? new Date(session.overallEndTime) : undefined;
-                    const startTimePart = startTime && !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : '';
-                    const endTimePart = endTime && !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : '';
-                    return `(${startTimePart}-${endTimePart})`;
+                    const startTime = format(new Date(session.overallStartTime), 'HH:mm');
+                    const endTime = format(new Date(session.overallEndTime), 'HH:mm');
+                    return `(${startTime}-${endTime})`;
                   }).join(' ');
                   row[col.id] = `${datePart} ${timeRanges}`;
                 }
@@ -300,17 +276,11 @@ import { useState } from 'react';
 
             // Find the ID of the first selected column that is NOT 'date'
             // This will be the target for the "Выходной" text
-            const firstMergeColumn = columns.find(col => col.id !== 'date' && selectedColumns[col.id]);
-            let firstMergeCell: ExcelJS.Cell | undefined;
+            const firstMergeColumnId = columns.find(col => col.id !== 'date' && selectedColumns[col.id])?.id;
 
-            // Explicitly check if firstMergeColumn is defined before accessing its key
-            if (firstMergeColumn) {
-              firstMergeCell = row.getCell(firstMergeColumn.id);
-            }
-
-            if (firstMergeColumn) {
+            if (firstMergeColumnId) {
               // Place "Выходной" in the first cell of the merged range (second visible column)
-              row[firstMergeColumn.id] = 'Выходной';
+              row[firstMergeColumnId] = 'Выходной';
             } else if (selectedColumns['date']) {
               // Fallback: If only 'date' column is selected, and no other mergeable columns,
               // then put "Выходной" in the 'date' column. No merge will happen in this case.
@@ -340,7 +310,7 @@ import { useState } from 'react';
             }
           });
           // Add one space padding to each header
-          const paddedHeader = ` ${col.label} `;
+          const paddedHeader = `  ${col.label}  `;
           return { header: paddedHeader, key: col.id, width: maxWidth + 2 };
         });
 
@@ -367,14 +337,10 @@ import { useState } from 'react';
             const dateCell = row.getCell('date'); // Access by key 'date'
             // Now, check if the first cell of the merged range contains "Выходной"
             const allDefinedColumns = worksheet.columns;
-            const firstMergeColumnInExcel = allDefinedColumns.find(col => col.key !== 'date' && selectedColumns[col.key]);
-            let firstMergeCellInExcel: ExcelJS.Cell | undefined;
+            const firstMergeColumn = allDefinedColumns.find(col => col.key !== 'date' && selectedColumns[col.key]);
+            const firstMergeCell = firstMergeColumn ? row.getCell(firstMergeColumn.key) : undefined;
 
-            if (firstMergeColumnInExcel) {
-              firstMergeCellInExcel = row.getCell(firstMergeColumnInExcel.key);
-            }
-
-            if ((dateCell && dateCell.value === 'Выходной') || (firstMergeCellInExcel && firstMergeCellInExcel.value === 'Выходной')) {
+            if ((dateCell && dateCell.value === 'Выходной') || (firstMergeCell && firstMergeCell.value === 'Выходной')) {
               row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = {
                   type: 'pattern',
@@ -383,21 +349,17 @@ import { useState } from 'react';
                 };
               });
 
+              // Merge cells from the second column (B) to the last visible column
               const rawDataColumnIndex = allDefinedColumns.findIndex(col => col.key === 'rawData');
               const lastVisibleColumnIndex = rawDataColumnIndex > -1 ? rawDataColumnIndex - 1 : allDefinedColumns.length - 1;
 
               // Ensure there are at least two columns to merge from B and a target for merge
               // The first column (index 0) is 'date', so merging starts from index 1 (second column)
               if (allDefinedColumns.length >= 2 && lastVisibleColumnIndex >= 1) {
-                const firstMergeColumnObj = allDefinedColumns[1];
-                const lastMergeColumnObj = allDefinedColumns[lastVisibleColumnIndex];
+                const firstMergeColumnLetter = allDefinedColumns[1].letter; // Column B (index 1)
+                const lastMergeColumnLetter = allDefinedColumns[lastVisibleColumnIndex].letter;
 
-                // Explicitly check if column objects are defined before accessing their properties
-                if (firstMergeColumnObj && lastMergeColumnObj) {
-                  const firstMergeColumnLetter = firstMergeColumnObj.letter;
-                  const lastMergeColumnLetter = lastMergeColumnObj.letter;
-                  worksheet.mergeCells(`${firstMergeColumnLetter}${rowNumber}:${lastMergeColumnLetter}${rowNumber}`);
-                }
+                worksheet.mergeCells(`${firstMergeColumnLetter}${rowNumber}:${lastMergeColumnLetter}${rowNumber}`);
               }
             }
           }
@@ -512,7 +474,7 @@ import { useState } from 'react';
                                   Выберите, как отображать оставшееся время.
                                 </p>
                               </div>
-                              <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hm">
+                              <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hms">
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="h" id="fmt-h" />
                                   <Label htmlFor="fmt-h">Часы (например, 6ч)</Label>
