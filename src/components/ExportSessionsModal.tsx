@@ -303,8 +303,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     });
 
     // Add the hidden rawData column for internal use
-    excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10, hidden: true });
+    excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 }); // Removed hidden: true here
     worksheet.columns = excelColumns;
+    worksheet.getColumn('rawData').hidden = true; // Set hidden property after defining columns
 
     // 6. Add data to worksheet
     worksheet.addRows(formattedData);
