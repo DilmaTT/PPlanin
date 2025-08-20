@@ -54,7 +54,7 @@ interface ExportSessionsModalProps {
 }
 
 export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSessionsModalProps) => {
-  const { getPlanForDate } = useStorage();
+  const { getPlanForDate, isOffDay } = useStorage();
   const [selectedColumns, setSelectedColumns] = useState<Record<string, boolean>>(
     columns.reduce((acc, col) => ({ ...acc, [col.id]: true }), {})
   );
@@ -69,6 +69,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     showMonth: true,
     showYear: true,
   });
+  const [planRemainingFormat, setPlanRemainingFormat] = useState('hms');
 
   const handleColumnChange = (columnId: string, checked: boolean) => {
     setSelectedColumns((prev) => ({ ...prev, [columnId]: checked }));
@@ -211,10 +212,28 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
               const remainingSeconds = (goalHours * 3600) - totalPlayTimeInSeconds;
               const sign = remainingSeconds < 0 ? '-' : '';
               const absSeconds = Math.abs(remainingSeconds);
-              const h = Math.floor(absSeconds / 3600).toString().padStart(2, '0');
-              const m = Math.floor((absSeconds % 3600) / 60).toString().padStart(2, '0');
-              const s = Math.floor(absSeconds % 60).toString().padStart(2, '0');
-              row[col.label] = `${sign}${h}:${m}:${s}`;
+
+              switch (planRemainingFormat) {
+                case 'h': {
+                  const h = Math.floor(absSeconds / 3600);
+                  row[col.label] = `${sign}${h}ч`;
+                  break;
+                }
+                case 'hm': {
+                  const h = Math.floor(absSeconds / 3600);
+                  const m = Math.floor((absSeconds % 3600) / 60);
+                  row[col.label] = `${sign}${h}ч ${m}мин`;
+                  break;
+                }
+                case 'hms':
+                default: {
+                  const h = Math.floor(absSeconds / 3600).toString().padStart(2, '0');
+                  const m = Math.floor((absSeconds % 3600) / 60).toString().padStart(2, '0');
+                  const s = Math.floor(absSeconds % 60).toString().padStart(2, '0');
+                  row[col.label] = `${sign}${h}:${m}:${s}`;
+                  break;
+                }
+              }
             } else {
               row[col.label] = '-';
             }
@@ -253,6 +272,62 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       });
     });
     worksheet['!cols'] = maxWidths.map(width => ({ wch: width + 2 }));
+
+    // Styling and Merging for Off Days
+    const range = XLSX.utils.decode_range(worksheet['!ref'] as string);
+    worksheet['!merges'] = worksheet['!merges'] || [];
+
+    const offDayStyle = {
+      fill: { fgColor: { rgb: "FFC7CE" } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+    const regularStyle = {
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+    const headerStyle = {
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    // Style Header
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_ref = XLSX.utils.encode_cell({ c: C, r: range.s.r });
+        const cell = worksheet[cell_ref];
+        if (cell) {
+            cell.s = headerStyle;
+        }
+    }
+
+    // Style Data Rows
+    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+      const currentDate = dateRange[R - 1];
+
+      if (isOffDay(currentDate)) {
+        if (range.e.c > 0) {
+            worksheet['!merges'].push({ s: { r: R, c: 1 }, e: { r: R, c: range.e.c } });
+        }
+
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+          const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {});
+          cell.s = offDayStyle;
+
+          if (C === 1) {
+            cell.v = 'Выходной';
+            cell.t = 's';
+          } else if (C > 1) {
+            delete cell.v;
+          }
+        }
+      } else {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+          const cell = worksheet[cell_ref];
+          if (cell) {
+            cell.s = regularStyle;
+          }
+        }
+      }
+    }
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sessions");
@@ -349,6 +424,39 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
                               <Label htmlFor="showYear">Показывать год</Label>
                             </div>
                           </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                  {column.id === 'planRemaining' && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full">
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-4">
+                        <div className="grid gap-4">
+                          <div className="space-y-1">
+                            <h4 className="font-medium leading-none">Формат времени</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Выберите, как отображать оставшееся время.
+                            </p>
+                          </div>
+                          <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hms">
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="h" id="fmt-h" />
+                              <Label htmlFor="fmt-h">Часы (например, 6ч)</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="hm" id="fmt-hm" />
+                              <Label htmlFor="fmt-hm">Часы и минуты (например, 6ч 15мин)</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="hms" id="fmt-hms" />
+                              <Label htmlFor="fmt-hms">Полный формат (05:00:00)</Label>
+                            </div>
+                          </RadioGroup>
                         </div>
                       </PopoverContent>
                     </Popover>
