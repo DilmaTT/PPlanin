@@ -276,12 +276,11 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers });
 
     // 6. Format XLSX-sheet
-    // Auto-fit column widths for visible columns
-    const visibleHeaders = activeColumns.map(col => col.label);
-    const colWidths = visibleHeaders.map(header => {
-      let maxWidth = header.length;
+    // Auto-fit column widths for ALL columns (including rawData)
+    const colWidths = allExportColumns.map(col => {
+      let maxWidth = col.label.length; // Start with header length
       formattedData.forEach(row => {
-        const cellValue = row[header];
+        const cellValue = row[col.label]; // Use col.label to access data
         if (cellValue) {
           const cellLength = String(cellValue).length;
           if (cellLength > maxWidth) {
@@ -289,14 +288,13 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
           }
         }
       });
-      return { wch: maxWidth + 2 }; // Add some padding
+      const colDef: { wch: number; hidden?: boolean } = { wch: maxWidth + 2 }; // Base object with wch
+      if (col.id === 'rawData') { // Conditionally add hidden property
+        colDef.hidden = true;
+      }
+      return colDef;
     });
 
-    // Find the index of the 'Raw Data' column and hide it
-    const rawDataColIndexInSheet = headers.indexOf('Raw Data');
-    if (rawDataColIndexInSheet !== -1) {
-      colWidths.splice(rawDataColIndexInSheet, 0, { hidden: true }); // Insert hidden property at the correct index
-    }
     worksheet['!cols'] = colWidths;
 
     // Styling and Merging for Off Days
@@ -345,7 +343,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             cell.t = 's';
           } else if (C > 1 && C <= activeColumns.length - 1) { // Other cells within the visible merged range
             delete cell.v; // Clear content
-          } else if (C === rawDataColIndexInSheet) {
+          } else if (C === allExportColumns.findIndex(col => col.id === 'rawData')) {
             // This is the rawData column, its content is already set, and it will be hidden.
             // No need to modify its value or type here.
           } else if (C === 0) { // This is the 'Дата' column
