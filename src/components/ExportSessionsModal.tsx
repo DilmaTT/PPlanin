@@ -12,21 +12,21 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Calendar } from '@/components/ui/calendar';
+import { Calendar }
+ from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
 import { 
   subDays, 
-  subMonths, 
   format, 
   startOfDay, 
   eachDayOfInterval, 
   endOfDay as getEndOfDay,
-  startOfWeek, // Added
-  endOfWeek,   // Added
-  startOfMonth, // Added
-  endOfMonth    // Added
+  startOfWeek, 
+  endOfWeek,   
+  startOfMonth, 
+  endOfMonth    
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useStorage } from '@/hooks/useStorage';
