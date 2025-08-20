@@ -321,10 +321,6 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       alignment: { horizontal: 'center', vertical: 'center' }
     };
 
-    const dataStyle = {
-      alignment: { horizontal: 'center', vertical: 'center' }
-    };
-
     const offDayMergedStyle = {
       fill: { fgColor: { rgb: "FFC7CE" } },
       alignment: { horizontal: 'center', vertical: 'center' }
@@ -352,23 +348,25 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         if (isHeaderRow) {
           cell.s = headerStyle; // Apply header style (bold and centered)
         } else {
-          // Apply data style to ALL data cells first (centered)
-          cell.s = dataStyle;
-          // Explicitly set type to string for all data cells to ensure consistent alignment
-          // This helps Excel apply string alignment even for values that might look like numbers/dates
-          cell.t = 's'; 
+          // Ensure cell.s exists and then set properties for data cells
+          cell.s = cell.s || {}; // Initialize style object if it doesn't exist
+          cell.s.alignment = { horizontal: 'center', vertical: 'center' };
+          cell.t = 's'; // Set type to string
+          cell.z = '@'; // Set number format to text to ensure alignment is respected
 
           if (isCurrentDayOff) {
             if (C === 0) {
-              // Date column for off-day, already has dataStyle and 's' type
+              // Date column for off-day, already centered and text formatted
             } else if (C >= mergeStartCol && C <= mergeEndCol) {
               // Cells within the merged range for off-day
-              cell.s = offDayMergedStyle; // Override with off-day style (light red background, centered)
+              cell.s.fill = offDayMergedStyle.fill; // Apply fill from offDayMergedStyle
+              // Alignment is already set to center, no need to re-set
               if (C === mergeStartCol) {
                 cell.v = 'Выходной';
-                cell.t = 's'; // Re-affirm type for merged cell
+                cell.t = 's';
+                cell.z = '@';
               } else {
-                delete cell.v; // Clear content for other merged cells
+                delete cell.v;
               }
             }
             // RawData column or any other column beyond visible merged range will retain dataStyle and 's' type
