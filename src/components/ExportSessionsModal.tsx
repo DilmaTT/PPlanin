@@ -314,7 +314,7 @@ import { useState } from 'react';
 
         // 7. Apply styles
         worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-          // Apply center alignment to all cells
+          // 1. Сначала примени ко всем ячейкам стиль выравнивания по центру.
           row.eachCell({ includeEmpty: true }, (cell) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
           });
@@ -323,9 +323,10 @@ import { useState } from 'react';
           if (rowNumber === 1) {
             row.font = { bold: true };
           } else {
-            // Check for "Выходной" (Day Off) rows using the 'rawData' column value
-            const rawDataCell = row.getCell('rawData'); // Access by key 'rawData'
-            if (rawDataCell && rawDataCell.value === '[]') { // Check if rawData is an empty array (indicating an off-day)
+            // 2. Затем добавь условие:
+            const rawDataCell = row.getCell('rawData');
+            if (rawDataCell && rawDataCell.value === '[]') { // Если день является выходным
+              // Примени светло-красный фон.
               row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = {
                   type: 'pattern',
@@ -334,20 +335,21 @@ import { useState } from 'react';
                 };
               });
 
-              // Merge cells from the second column (B) to the last visible column
+              // Объедини ячейки с первой видимой колонки до последней видимой колонки
               const allDefinedColumns = worksheet.columns;
               const rawDataColumnIndex = allDefinedColumns.findIndex(col => col.key === 'rawData');
               const lastVisibleColumnIndex = rawDataColumnIndex > -1 ? rawDataColumnIndex - 1 : allDefinedColumns.length - 1;
 
-              // Ensure there are at least two columns to merge from B and a target for merge
-              // The first column (index 0) is 'date', so merging starts from index 1 (second column)
-              if (allDefinedColumns.length >= 2 && lastVisibleColumnIndex >= 1) {
-                const firstMergeColumnLetter = allDefinedColumns[1].letter; // Column B (index 1)
+              // Убедимся, что есть хотя бы одна видимая колонка для объединения
+              if (allDefinedColumns.length >= 1 && lastVisibleColumnIndex >= 0) {
+                const firstMergeColumnLetter = allDefinedColumns[0].letter; // Колонка A (индекс 0)
                 const lastMergeColumnLetter = allDefinedColumns[lastVisibleColumnIndex].letter;
 
                 worksheet.mergeCells(`${firstMergeColumnLetter}${rowNumber}:${lastMergeColumnLetter}${rowNumber}`);
               }
             }
+            // else - если это обычный день (с сессиями или без): Никакого фона и объединения применять не нужно.
+            // Это условие не требует явного else-блока, так как стили применяются только в if-блоке.
           }
         });
 
