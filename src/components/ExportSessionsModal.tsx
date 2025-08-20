@@ -300,11 +300,17 @@ import { useState } from 'react';
 
             // Find the ID of the first selected column that is NOT 'date'
             // This will be the target for the "Выходной" text
-            const firstMergeColumnId = columns.find(col => col.id !== 'date' && selectedColumns[col.id])?.id;
+            const firstMergeColumn = columns.find(col => col.id !== 'date' && selectedColumns[col.id]);
+            let firstMergeCell: ExcelJS.Cell | undefined;
 
-            if (firstMergeColumnId) {
+            // Explicitly check if firstMergeColumn is defined before accessing its key
+            if (firstMergeColumn) {
+              firstMergeCell = row.getCell(firstMergeColumn.id);
+            }
+
+            if (firstMergeColumn) {
               // Place "Выходной" in the first cell of the merged range (second visible column)
-              row[firstMergeColumnId] = 'Выходной';
+              row[firstMergeColumn.id] = 'Выходной';
             } else if (selectedColumns['date']) {
               // Fallback: If only 'date' column is selected, and no other mergeable columns,
               // then put "Выходной" in the 'date' column. No merge will happen in this case.
@@ -334,7 +340,7 @@ import { useState } from 'react';
             }
           });
           // Add one space padding to each header
-          const paddedHeader = ` ${col.label} `; // Изменено на один пробел
+          const paddedHeader = ` ${col.label} `;
           return { header: paddedHeader, key: col.id, width: maxWidth + 2 };
         });
 
@@ -361,10 +367,14 @@ import { useState } from 'react';
             const dateCell = row.getCell('date'); // Access by key 'date'
             // Now, check if the first cell of the merged range contains "Выходной"
             const allDefinedColumns = worksheet.columns;
-            const firstMergeColumn = allDefinedColumns.find(col => col.key !== 'date' && selectedColumns[col.key]);
-            const firstMergeCell = firstMergeColumn ? row.getCell(firstMergeColumn.key) : undefined;
+            const firstMergeColumnInExcel = allDefinedColumns.find(col => col.key !== 'date' && selectedColumns[col.key]);
+            let firstMergeCellInExcel: ExcelJS.Cell | undefined;
 
-            if ((dateCell && dateCell.value === 'Выходной') || (firstMergeCell && firstMergeCell.value === 'Выходной')) {
+            if (firstMergeColumnInExcel) {
+              firstMergeCellInExcel = row.getCell(firstMergeColumnInExcel.key);
+            }
+
+            if ((dateCell && dateCell.value === 'Выходной') || (firstMergeCellInExcel && firstMergeCellInExcel.value === 'Выходной')) {
               row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = {
                   type: 'pattern',
@@ -373,17 +383,21 @@ import { useState } from 'react';
                 };
               });
 
-              // Merge cells from the second column (B) to the last visible column
               const rawDataColumnIndex = allDefinedColumns.findIndex(col => col.key === 'rawData');
               const lastVisibleColumnIndex = rawDataColumnIndex > -1 ? rawDataColumnIndex - 1 : allDefinedColumns.length - 1;
 
               // Ensure there are at least two columns to merge from B and a target for merge
               // The first column (index 0) is 'date', so merging starts from index 1 (second column)
               if (allDefinedColumns.length >= 2 && lastVisibleColumnIndex >= 1) {
-                const firstMergeColumnLetter = allDefinedColumns[1].letter; // Column B (index 1)
-                const lastMergeColumnLetter = allDefinedColumns[lastVisibleColumnIndex].letter;
+                const firstMergeColumnObj = allDefinedColumns[1];
+                const lastMergeColumnObj = allDefinedColumns[lastVisibleColumnIndex];
 
-                worksheet.mergeCells(`${firstMergeColumnLetter}${rowNumber}:${lastMergeColumnLetter}${rowNumber}`);
+                // Explicitly check if column objects are defined before accessing their properties
+                if (firstMergeColumnObj && lastMergeColumnObj) {
+                  const firstMergeColumnLetter = firstMergeColumnObj.letter;
+                  const lastMergeColumnLetter = lastMergeColumnObj.letter;
+                  worksheet.mergeCells(`${firstMergeColumnLetter}${rowNumber}:${lastMergeColumnLetter}${rowNumber}`);
+                }
               }
             }
           }
@@ -498,7 +512,7 @@ import { useState } from 'react';
                                   Выберите, как отображать оставшееся время.
                                 </p>
                               </div>
-                              <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hm"> {/* Изменено на "hm" */}
+                              <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hm">
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="h" id="fmt-h" />
                                   <Label htmlFor="fmt-h">Часы (например, 6ч)</Label>
