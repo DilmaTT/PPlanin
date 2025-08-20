@@ -316,17 +316,21 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     worksheet['!merges'] = worksheet['!merges'] || [];
 
     // Define styles
+    const baseCellStyle = {
+      alignment: { horizontal: 'center', vertical: 'center' },
+      t: 's', // Always treat as string
+      z: '@'  // Always use text format
+    };
+
     const headerStyle = {
-      font: { bold: true },
-      alignment: { horizontal: 'center', vertical: 'center' }
+      font: { bold: true }
     };
 
     const offDayMergedStyle = {
-      fill: { fgColor: { rgb: "FFC7CE" } },
-      alignment: { horizontal: 'center', vertical: 'center' }
+      fill: { fgColor: { rgb: "FFC7CE" } }
     };
 
-    // Apply styles to all cells
+    // Apply styles to all cells in the defined range
     for (let R = range.s.r; R <= range.e.r; ++R) {
       const isHeaderRow = (R === range.s.r);
       const currentDate = isHeaderRow ? null : dateRange[R - (range.s.r + 1)];
@@ -345,35 +349,29 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
         const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
 
-        // Always set type to string and format to text for consistent alignment
-        cell.t = 's';
-        cell.z = '@';
+        // 1. Initialize cell style with base properties
+        cell.s = { ...baseCellStyle };
 
+        // 2. Apply specific styles on top
         if (isHeaderRow) {
-          cell.s = headerStyle; // Apply header style (bold and centered)
-        } else {
-          // For data cells, ensure a fresh style object and explicit type/format
-          delete cell.s; // Explicitly remove any existing style object
-          cell.s = {
-            alignment: { horizontal: 'center', vertical: 'center' }
-          };
-
-          if (isCurrentDayOff) {
-            if (C === 0) {
-              // Date column for off-day, already centered and text formatted
-              // No additional style needed here, it already has the default data cell style
-            } else if (C >= mergeStartCol && C <= mergeEndCol) {
-              // Cells within the merged range for off-day
-              cell.s = { ...offDayMergedStyle }; // Assign the full style object including fill and alignment
-              if (C === mergeStartCol) {
-                cell.v = 'Выходной';
-                // cell.t and cell.z are already set to 's' and '@'
-              } else {
-                delete cell.v; // Clear value for merged cells beyond the first
-              }
+          Object.assign(cell.s, headerStyle); // Add header font properties
+        } else if (isCurrentDayOff) {
+          if (C === 0) {
+            // Date column for off-day, already has base style
+          } else if (C >= mergeStartCol && C <= mergeEndCol) {
+            Object.assign(cell.s, offDayMergedStyle); // Add off-day fill properties
+            if (C === mergeStartCol) {
+              cell.v = 'Выходной';
+            } else {
+              delete cell.v; // Clear value for merged cells beyond the first
             }
-            // RawData column or any other column beyond visible merged range will retain dataStyle and 's' type
           }
+        }
+
+        // 3. Ensure cell value exists, even if empty, for style application
+        // This is important because XLSX might not apply styles to cells without a 'v' property.
+        if (cell.v === undefined) {
+            cell.v = '';
         }
       }
     }
