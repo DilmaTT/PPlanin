@@ -186,18 +186,19 @@ import { useState } from 'react';
                   break;
                 }
                 const firstSession = daySessions[0];
-                const datePart = format(new Date(firstSession.overallStartTime), 'd MMMM yyyy', { locale: ru });
+                // Ensure firstSession.overallStartTime is not undefined before using it
+                const datePart = firstSession.overallStartTime ? format(new Date(firstSession.overallStartTime), 'd MMMM yyyy', { locale: ru }) : '';
 
                 if (daySessions.length === 1) {
-                  const startTime = new Date(firstSession.overallStartTime);
-                  const endTime = new Date(firstSession.overallEndTime);
-                  const startTimePart = format(startTime, 'HH:mm');
-                  const endTimePart = format(endTime, 'HH:mm');
+                  const startTime = firstSession.overallStartTime ? new Date(firstSession.overallStartTime) : undefined;
+                  const endTime = firstSession.overallEndTime ? new Date(firstSession.overallEndTime) : undefined;
+                  const startTimePart = startTime ? format(startTime, 'HH:mm') : '';
+                  const endTimePart = endTime ? format(endTime, 'HH:mm') : '';
                   row[col.id] = `${datePart} ${startTimePart}-${endTimePart}`;
                 } else {
                   const timeRanges = daySessions.map(session => {
-                    const startTime = format(new Date(session.overallStartTime), 'HH:mm');
-                    const endTime = format(new Date(session.overallEndTime), 'HH:mm');
+                    const startTime = session.overallStartTime ? format(new Date(session.overallStartTime), 'HH:mm') : '';
+                    const endTime = session.overallEndTime ? format(new Date(session.overallEndTime), 'HH:mm') : '';
                     return `(${startTime}-${endTime})`;
                   }).join(' ');
                   row[col.id] = `${datePart} ${timeRanges}`;
@@ -310,7 +311,7 @@ import { useState } from 'react';
             }
           });
           // Add one space padding to each header
-          const paddedHeader = `  ${col.label}  `;
+          const paddedHeader = ` ${col.label} `; // Изменено на один пробел
           return { header: paddedHeader, key: col.id, width: maxWidth + 2 };
         });
 
@@ -474,7 +475,7 @@ import { useState } from 'react';
                                   Выберите, как отображать оставшееся время.
                                 </p>
                               </div>
-                              <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hms">
+                              <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hm"> {/* Изменено на "hm" */}
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="h" id="fmt-h" />
                                   <Label htmlFor="fmt-h">Часы (например, 6ч)</Label>
