@@ -16,7 +16,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { subDays, subMonths, format, isWithinInterval } from 'date-fns';
+import { subDays, subMonths, format, isWithinInterval, startOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Session, SessionPeriod } from '@/types';
 
@@ -85,10 +85,15 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     if (dateFormat.showDayOfWeek) {
       dateString = `E, ${dateString}`;
     }
-    return `${dateString} HH:mm`;
+    return dateString; // Removed HH:mm as it's a daily aggregate
   };
 
   const handleExport = () => {
+    // 1. Gather settings
+    const activeColumns = columns.filter(col => selectedColumns[col.id]);
+    const headers = activeColumns.map(col => col.label);
+
+    // 2. Filter sessions by date range
     let startDate = new Date();
     let endDate = new Date();
 
@@ -106,32 +111,63 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
     const filteredSessions = sessions.filter(session => {
       const sessionDate = new Date(session.overallStartTime);
-      return isWithinInterval(sessionDate, { start: startDate, end: endOfDay });
+      return isWithinInterval(sessionDate, { start: startOfDay(startDate), end: endOfDay });
     });
-    
-    const activeColumns = columns.filter(col => selectedColumns[col.id]);
-    const headers = activeColumns.map(col => col.label);
 
-    const formattedData = filteredSessions.map(session => {
+    // 3. Group sessions by day
+    const groupedByDay: Record<string, Session[]> = filteredSessions.reduce((acc, session) => {
+      const dayKey = format(new Date(session.overallStartTime), 'yyyy-MM-dd');
+      if (!acc[dayKey]) {
+        acc[dayKey] = [];
+      }
+      acc[dayKey].push(session);
+      return acc;
+    }, {} as Record<string, Session[]>);
+
+    // 4. Aggregate and format data for each day
+    const formattedData = Object.values(groupedByDay).map(daySessions => {
+      daySessions.sort((a, b) => new Date(a.overallStartTime).getTime() - new Date(b.overallStartTime).getTime());
+
+      const firstSession = daySessions[0];
+      const lastSession = daySessions[daySessions.length - 1];
+
+      let totalDurationInSeconds = 0;
+      let totalPlayTimeInSeconds = 0;
+      let totalSelectTimeInSeconds = 0;
+      let totalHandsPlayed = 0;
+      const allNotes: string[] = [];
+
+      daySessions.forEach(session => {
+        totalDurationInSeconds += (new Date(session.overallEndTime).getTime() - new Date(session.overallStartTime).getTime()) / 1000;
+        
+        const calculateDurationInSeconds = (type: SessionPeriod['type']) => {
+          return (session.periods?.filter(p => p.type === type)
+            .reduce((acc, p) => acc + (new Date(p.endTime).getTime() - new Date(p.startTime).getTime()), 0) ?? 0) / 1000;
+        };
+
+        totalPlayTimeInSeconds += calculateDurationInSeconds('play');
+        totalSelectTimeInSeconds += calculateDurationInSeconds('select');
+        totalHandsPlayed += session.handsPlayed || 0;
+        if (session.notes) {
+          allNotes.push(session.notes);
+        }
+      });
+
       const row: Record<string, any> = {};
-      
-      const calculateDurationInSeconds = (type: SessionPeriod['type']) => {
-        return (session.periods?.filter(p => p.type === type)
-          .reduce((acc, p) => acc + (new Date(p.endTime).getTime() - new Date(p.startTime).getTime()), 0) ?? 0) / 1000;
-      };
-      
-      const totalDurationInSeconds = (new Date(session.overallEndTime).getTime() - new Date(session.overallStartTime).getTime()) / 1000;
-      const playTimeInSeconds = calculateDurationInSeconds('play');
-      const playTimeInHours = playTimeInSeconds / 3600;
+      const totalPlayTimeInHours = totalPlayTimeInSeconds / 3600;
 
+      // 5. Format columns based on active selection
       activeColumns.forEach(col => {
         switch (col.id) {
           case 'date':
-            row[col.label] = format(new Date(session.overallStartTime), buildDateFormatString(), { locale: ru });
+            row[col.label] = format(new Date(firstSession.overallStartTime), buildDateFormatString(), { locale: ru });
+            break;
+          case 'sessionCount':
+            row[col.label] = daySessions.length;
             break;
           case 'sessionDateTime': {
-            const startTime = new Date(session.overallStartTime);
-            const endTime = new Date(session.overallEndTime);
+            const startTime = new Date(firstSession.overallStartTime);
+            const endTime = new Date(lastSession.overallEndTime);
             const datePart = format(startTime, 'd MMMM yyyy', { locale: ru });
             const startTimePart = format(startTime, 'HH:mm');
             const endTimePart = format(endTime, 'HH:mm');
@@ -142,28 +178,29 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             row[col.label] = formatDuration(totalDurationInSeconds);
             break;
           case 'playTime':
-            row[col.label] = formatDuration(playTimeInSeconds);
+            row[col.label] = formatDuration(totalPlayTimeInSeconds);
             break;
           case 'selectTime':
-            row[col.label] = formatDuration(calculateDurationInSeconds('select'));
+            row[col.label] = formatDuration(totalSelectTimeInSeconds);
             break;
           case 'hands':
-            row[col.label] = session.handsPlayed;
+            row[col.label] = totalHandsPlayed;
             break;
           case 'handsPerHour':
-            row[col.label] = playTimeInHours > 0 ? Math.round((session.handsPlayed || 0) / playTimeInHours) : 0;
+            row[col.label] = totalPlayTimeInHours > 0 ? Math.round(totalHandsPlayed / totalPlayTimeInHours) : 0;
             break;
           case 'notes':
-            row[col.label] = session.notes;
+            row[col.label] = allNotes.join('; ');
             break;
           default:
-            // You can add logic for other columns like plans here if needed
+            // Plan-related columns are left blank as they are not part of session data
             break;
         }
       });
       return row;
     });
 
+    // 6. Generate and download XLSX file
     const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sessions");
