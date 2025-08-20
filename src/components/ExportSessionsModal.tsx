@@ -280,7 +280,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     const colWidths = allExportColumns.map(col => {
       let maxWidth = col.label.length; // Start with header length
       formattedData.forEach(row => {
-        const cellValue = row[col.label]; // Use col.label to access data
+        const cellValue = row[col.label];
         if (cellValue) {
           const cellLength = String(cellValue).length;
           if (cellLength > maxWidth) {
@@ -288,10 +288,15 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
           }
         }
       });
-      const colDef: { wch: number; hidden?: boolean } = { wch: maxWidth + 2 }; // Base object with wch
-      if (col.id === 'rawData') { // Conditionally add hidden property
+
+      // Create the base object with the wch property.
+      const colDef: { wch: number; hidden?: boolean } = { wch: maxWidth + 2 };
+
+      // Conditionally add the hidden property for the rawData column.
+      if (col.id === 'rawData') {
         colDef.hidden = true;
       }
+
       return colDef;
     });
 
