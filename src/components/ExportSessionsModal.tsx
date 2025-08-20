@@ -16,7 +16,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { subDays, subMonths, format, isWithinInterval, startOfDay } from 'date-fns';
+import { subDays, subMonths, format, isWithinInterval, startOfDay, eachDayOfInterval, endOfDay as getEndOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Session, SessionPeriod } from '@/types';
 
@@ -62,6 +62,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     to: new Date(),
   });
   const [dateFormat, setDateFormat] = useState({
+    showDayNumber: true,
     showDayOfWeek: false,
     showMonth: true,
     showYear: true,
@@ -77,15 +78,17 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
   const buildDateFormatString = () => {
     const formatParts: string[] = [];
+    if (dateFormat.showDayNumber) formatParts.push('d');
+    if (dateFormat.showMonth) formatParts.push('MMMM');
     if (dateFormat.showYear) formatParts.push('yyyy');
-    if (dateFormat.showMonth) formatParts.push('MM');
-    formatParts.push('dd');
-
-    let dateString = formatParts.join('-');
+    
+    let dateString = formatParts.join(' ').trim();
+    
     if (dateFormat.showDayOfWeek) {
-      dateString = `E, ${dateString}`;
+      // EEE for short day name, EEEE for full
+      dateString = `EEE, ${dateString}`;
     }
-    return dateString; // Removed HH:mm as it's a daily aggregate
+    return dateString;
   };
 
   const handleExport = () => {
@@ -93,7 +96,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     const activeColumns = columns.filter(col => selectedColumns[col.id]);
     const headers = activeColumns.map(col => col.label);
 
-    // 2. Filter sessions by date range
+    // 2. Determine date range
     let startDate = new Date();
     let endDate = new Date();
 
@@ -106,16 +109,10 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       endDate = date.to || date.from;
     }
     
-    const endOfDay = new Date(endDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const dateRange = eachDayOfInterval({ start: startOfDay(startDate), end: getEndOfDay(endDate) });
 
-    const filteredSessions = sessions.filter(session => {
-      const sessionDate = new Date(session.overallStartTime);
-      return isWithinInterval(sessionDate, { start: startOfDay(startDate), end: endOfDay });
-    });
-
-    // 3. Group sessions by day
-    const groupedByDay: Record<string, Session[]> = filteredSessions.reduce((acc, session) => {
+    // 3. Group sessions by day for efficient lookup
+    const groupedByDay: Record<string, Session[]> = sessions.reduce((acc, session) => {
       const dayKey = format(new Date(session.overallStartTime), 'yyyy-MM-dd');
       if (!acc[dayKey]) {
         acc[dayKey] = [];
@@ -124,10 +121,25 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       return acc;
     }, {} as Record<string, Session[]>);
 
-    // 4. Aggregate and format data for each day
-    const formattedData = Object.values(groupedByDay).map(daySessions => {
-      daySessions.sort((a, b) => new Date(a.overallStartTime).getTime() - new Date(b.overallStartTime).getTime());
+    // 4. Iterate through the date range and build data
+    const formattedData = dateRange.map(currentDate => {
+      const dayKey = format(currentDate, 'yyyy-MM-dd');
+      const daySessions = groupedByDay[dayKey] || [];
+      const row: Record<string, any> = {};
 
+      const dateColumnFormat = buildDateFormatString();
+      const formattedDate = dateColumnFormat ? format(currentDate, dateColumnFormat, { locale: ru }) : format(currentDate, 'yyyy-MM-dd', { locale: ru });
+
+      if (daySessions.length === 0) {
+        // Handle empty day
+        if (selectedColumns.date) {
+          row[columns.find(c => c.id === 'date')!.label] = formattedDate;
+        }
+        return row;
+      }
+
+      // Aggregate data for the day
+      daySessions.sort((a, b) => new Date(a.overallStartTime).getTime() - new Date(b.overallStartTime).getTime());
       const firstSession = daySessions[0];
       const lastSession = daySessions[daySessions.length - 1];
 
@@ -139,28 +151,22 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
       daySessions.forEach(session => {
         totalDurationInSeconds += (new Date(session.overallEndTime).getTime() - new Date(session.overallStartTime).getTime()) / 1000;
-        
-        const calculateDurationInSeconds = (type: SessionPeriod['type']) => {
-          return (session.periods?.filter(p => p.type === type)
+        const calculateDurationInSeconds = (type: SessionPeriod['type']) => 
+          (session.periods?.filter(p => p.type === type)
             .reduce((acc, p) => acc + (new Date(p.endTime).getTime() - new Date(p.startTime).getTime()), 0) ?? 0) / 1000;
-        };
-
         totalPlayTimeInSeconds += calculateDurationInSeconds('play');
         totalSelectTimeInSeconds += calculateDurationInSeconds('select');
         totalHandsPlayed += session.handsPlayed || 0;
-        if (session.notes) {
-          allNotes.push(session.notes);
-        }
+        if (session.notes) allNotes.push(session.notes);
       });
 
-      const row: Record<string, any> = {};
       const totalPlayTimeInHours = totalPlayTimeInSeconds / 3600;
 
       // 5. Format columns based on active selection
       activeColumns.forEach(col => {
         switch (col.id) {
           case 'date':
-            row[col.label] = format(new Date(firstSession.overallStartTime), buildDateFormatString(), { locale: ru });
+            row[col.label] = formattedDate;
             break;
           case 'sessionCount':
             row[col.label] = daySessions.length;
@@ -193,7 +199,6 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             row[col.label] = allNotes.join('; ');
             break;
           default:
-            // Plan-related columns are left blank as they are not part of session data
             break;
         }
       });
@@ -264,6 +269,14 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
                             </p>
                           </div>
                           <div className="grid gap-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="showDayNumber"
+                                checked={dateFormat.showDayNumber}
+                                onCheckedChange={(checked) => handleDateFormatChange('showDayNumber', !!checked)}
+                              />
+                              <Label htmlFor="showDayNumber">Показывать число</Label>
+                            </div>
                             <div className="flex items-center space-x-2">
                               <Checkbox
                                 id="showDayOfWeek"
