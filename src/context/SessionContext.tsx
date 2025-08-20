@@ -18,7 +18,7 @@ interface SessionContextType {
   startSession: () => void;
   stopSession: () => void;
   togglePeriod: (newType: 'play' | 'break' | 'select') => void;
-  completedSession: Omit<Session, 'id' | 'notes' | 'handsPlayed'> | null; // Изменено: теперь содержит данные без ID, заметок и рук
+  completedSession: Omit<Session, 'id' | 'notes' | 'handsPlayed'> | null;
   clearCompletedSession: () => void;
 }
 
@@ -29,11 +29,11 @@ interface SessionProviderProps {
 }
 
 export const SessionProvider = ({ children }: SessionProviderProps) => {
-  useStorage(); // addSession больше не используется напрямую здесь, но хук все еще должен быть вызван
+  useStorage();
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPeriodType, setCurrentPeriodType] = useState<'play' | 'break' | 'select'>('play');
-  const [completedSession, setCompletedSession] = useState<Omit<Session, 'id' | 'notes' | 'handsPlayed'> | null>(null); // Изменено: теперь содержит данные без ID, заметок и рук
+  const [completedSession, setCompletedSession] = useState<Omit<Session, 'id' | 'notes' | 'handsPlayed'> | null>(null);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -51,47 +51,41 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
     }, 1000);
   };
 
-  // Effect to load session from localStorage on mount
-  // Using a simple useState initializer for initial load, not for continuous updates
   useState(() => {
     const storedSessionString = localStorage.getItem('activeSession');
     if (storedSessionString) {
       try {
         const storedSession: StoredActiveSession = JSON.parse(storedSessionString);
         
-        // Restore activeSession state
         setActiveSession({
           overallStartTime: storedSession.overallStartTime,
-          periods: storedSession.periods || [], // Ensure periods is an array
+          periods: storedSession.periods || [],
         });
 
-        // Calculate elapsed time from stored start time to now
         const sessionStartTime = new Date(storedSession.overallStartTime).getTime();
         const currentTimestamp = Date.now();
         const calculatedElapsedTime = Math.floor((currentTimestamp - sessionStartTime) / 1000);
         setElapsedTime(calculatedElapsedTime);
 
-        // Set current period type based on the last period in the stored session
         const lastPeriod = storedSession.periods && storedSession.periods.length > 0
           ? storedSession.periods[storedSession.periods.length - 1]
           : null;
         if (lastPeriod) {
           setCurrentPeriodType(lastPeriod.type);
         } else {
-          setCurrentPeriodType('play'); // Default if periods array is empty (shouldn't happen)
+          setCurrentPeriodType('play');
         }
 
-        // Restart the timer
         startTimer();
         console.log('Active session restored from localStorage.');
       } catch (error) {
         console.error('Failed to parse active session from localStorage:', error);
-        localStorage.removeItem('activeSession'); // Clear corrupted data
+        localStorage.removeItem('activeSession');
       }
     }
 
-    return () => stopTimer(); // Cleanup on unmount
-  }); // Empty dependency array ensures this runs only once on mount
+    return () => stopTimer();
+  });
 
   const startSession = () => {
     const now = new Date().toISOString();
@@ -103,11 +97,10 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
     });
     setCurrentPeriodType('play');
     setElapsedTime(0);
-    setCompletedSession(null); // Clear any previous completed session
+    setCompletedSession(null);
     startTimer();
 
-    // Save active session data to localStorage
-    const tempId = crypto.randomUUID(); // Generate a client-side UUID for persistence
+    const tempId = crypto.randomUUID();
     const sessionToStore: StoredActiveSession = {
       id: tempId,
       overallStartTime: now,
@@ -142,11 +135,9 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
       periods: finalizedPeriods,
     };
 
-    // Убеждаемся, что здесь нет вызовов addSession или updateSession
-    setCompletedSession(sessionData); // Устанавливаем данные сессии без ID, заметок и рук
-    setActiveSession(null); // Reset active session state
+    setCompletedSession(sessionData);
+    setActiveSession(null);
 
-    // Remove active session data from localStorage
     localStorage.removeItem('activeSession');
     console.log('Active session stopped and removed from localStorage.');
   };
@@ -170,14 +161,13 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
     setActiveSession(newActiveSession);
     setCurrentPeriodType(newType);
 
-    // Update localStorage with the new periods
     const storedSessionString = localStorage.getItem('activeSession');
     if (storedSessionString) {
       try {
         const storedSession: StoredActiveSession = JSON.parse(storedSessionString);
         localStorage.setItem('activeSession', JSON.stringify({
           ...storedSession,
-          periods: newActiveSession.periods || [], // Ensure periods is an array
+          periods: newActiveSession.periods || [],
         }));
       } catch (error) {
         console.error('Failed to update active session periods in localStorage:', error);

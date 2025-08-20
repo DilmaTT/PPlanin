@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStorage } from '@/hooks/useStorage';
 import type { Session } from '@/types';
+import { formatSeconds } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -26,26 +27,25 @@ const PostSessionModal = ({ isOpen, onClose, session }: PostSessionModalProps) =
   const [handsPlayed, setHandsPlayed] = useState('');
 
   useEffect(() => {
-    setNotes('');
-    setHandsPlayed('');
-  }, [session]);
+    // Reset form fields when the modal becomes visible
+    if (isOpen) {
+      setNotes('');
+      setHandsPlayed('');
+    }
+  }, [isOpen]);
 
   const handleSave = () => {
-    console.log('Шаг 3: Функция сохранения в модальном окне вызвана');
     if (!session) return;
 
     const handsPlayedNumber = parseInt(handsPlayed, 10);
-    
-    // Создаем полный объект сессии, объединяя данные из пропсов и введенные пользователем данные
-    const fullSession: Omit<Session, 'id'> = {
+
+    const finalSession: Omit<Session, 'id'> = {
       ...session,
       notes: notes,
       handsPlayed: isNaN(handsPlayedNumber) ? 0 : handsPlayedNumber,
     };
 
-    // Вызываем ТОЛЬКО addSession с полным объектом сессии
-    addSession(fullSession);
-
+    addSession(finalSession);
     onClose();
   };
 
@@ -55,7 +55,32 @@ const PostSessionModal = ({ isOpen, onClose, session }: PostSessionModalProps) =
     }
   };
 
-  if (!session) return null;
+  const sessionStats = useMemo(() => {
+    if (!session) return null;
+
+    const totalTime = session.overallDuration || 0;
+    let playingTime = 0;
+    let selectTime = 0;
+
+    if (settings.splitPeriods && session.periods) {
+      session.periods.forEach(p => {
+        const duration = (new Date(p.endTime).getTime() - new Date(p.startTime).getTime()) / 1000;
+        if (p.type === 'play') {
+          playingTime += duration;
+        } else if (p.type === 'select') {
+          selectTime += duration;
+        }
+      });
+    }
+
+    return {
+      totalTime,
+      playingTime,
+      selectTime,
+    };
+  }, [session, settings.splitPeriods]);
+
+  if (!session || !sessionStats) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -66,6 +91,27 @@ const PostSessionModal = ({ isOpen, onClose, session }: PostSessionModalProps) =
             Добавьте детали к вашей сессии. Нажмите 'Сохранить', когда закончите.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="grid gap-2 py-4 border-b">
+          <h4 className="font-medium text-sm text-muted-foreground">Статистика сессии</h4>
+          <div className="flex justify-between items-center">
+            <p>Общее время:</p>
+            <p className="font-semibold">{formatSeconds(sessionStats.totalTime)}</p>
+          </div>
+          {settings.splitPeriods && (
+            <>
+              <div className="flex justify-between items-center">
+                <p>Время игры:</p>
+                <p className="font-semibold">{formatSeconds(sessionStats.playingTime)}</p>
+              </div>
+              <div className="flex justify-between items-center">
+                <p>Время селекта:</p>
+                <p className="font-semibold">{formatSeconds(sessionStats.selectTime)}</p>
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="grid gap-4 py-4">
           {settings.showNotes && (
             <div className="grid grid-cols-4 items-center gap-4">
