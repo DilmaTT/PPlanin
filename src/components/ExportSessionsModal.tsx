@@ -187,7 +187,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             break;
           case 'sessionDateTime': {
             if (daySessions.length === 0) {
-              row[col.label] = '-';
+              row[col.label] = '';
               break;
             }
             const firstSession = daySessions[0];
@@ -335,10 +335,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     // Style Header: Apply center alignment and bold to all header cells
     for (let C = range.s.c; C <= range.e.c; ++C) {
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: range.s.r });
-        const cell = worksheet[cell_ref];
-        if (cell) {
-            cell.s = headerStyle;
-        }
+        // Ensure cell exists before applying style
+        const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {}); 
+        cell.s = headerStyle;
     }
 
     // Style Data Rows: Apply regular style (center alignment) to all cells first
@@ -349,10 +348,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       // Apply regular style to all cells in the row by default
       for (let C = range.s.c; C <= range.e.c; ++C) {
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-        const cell = worksheet[cell_ref];
-        if (cell) {
-          cell.s = regularStyle;
-        }
+        // Ensure cell exists before applying style
+        const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {}); 
+        cell.s = regularStyle;
       }
 
       if (isOffDay(currentDate)) {
