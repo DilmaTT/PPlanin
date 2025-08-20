@@ -315,6 +315,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     const range = XLSX.utils.decode_range(worksheet['!ref'] as string);
     worksheet['!merges'] = worksheet['!merges'] || [];
 
+    // Define styles
     const headerStyle = {
       font: { bold: true },
       alignment: { horizontal: 'center', vertical: 'center' }
@@ -329,55 +330,48 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       alignment: { horizontal: 'center', vertical: 'center' }
     };
 
-    // Apply header styles (bold and centered)
-    for (let C = range.s.c; C <= range.e.c; ++C) {
-      const cell_ref = XLSX.utils.encode_cell({ c: C, r: range.s.r });
-      const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
-      cell.s = headerStyle;
-    }
+    // Apply styles to all cells
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      const isHeaderRow = (R === range.s.r);
+      const currentDate = isHeaderRow ? null : dateRange[R - (range.s.r + 1)];
+      const isCurrentDayOff = currentDate ? isOffDay(currentDate) : false;
 
-    // Apply data styles (centered) and handle "Выходной" rows
-    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-      const currentDate = dateRange[R - (range.s.r + 1)]; // Adjust index for dateRange
-      const isCurrentDayOff = isOffDay(currentDate);
+      // Determine merge range for off-days
+      const mergeStartCol = 1; // B column (Кол-во сессий)
+      const mergeEndCol = activeColumns.length - 1; // Last visible column index (excluding rawData)
 
-      if (isCurrentDayOff) {
-        // Handle "Выходной" row: merge, text, and background
-        // Merge from the second visible column (index 1) to the last visible column
-        // The first column (date) should not be merged.
-        const mergeStartCol = 1; // B column
-        const mergeEndCol = activeColumns.length - 1; // Last visible column index
+      if (isCurrentDayOff && mergeEndCol >= mergeStartCol) {
+        // Add merge for off-day row
+        worksheet['!merges'].push({ s: { r: R, c: mergeStartCol }, e: { r: R, c: mergeEndCol } });
+      }
 
-        if (mergeEndCol >= mergeStartCol) { // Only merge if there's more than just the date column
-          worksheet['!merges'].push({ s: { r: R, c: mergeStartCol }, e: { r: R, c: mergeEndCol } });
-        }
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+        const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
 
-        // Apply style and content to the merged range
-        for (let C = range.s.c; C <= range.e.c; ++C) { // Iterate through all columns in the worksheet
-          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-          const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
-
-          if (C === 0) { // Column A (Дата)
-            // Keep existing date value, apply dataStyle
-            cell.s = dataStyle;
-          } else if (C >= mergeStartCol && C <= mergeEndCol) { // Within the merged range for visible columns
-            cell.s = offDayMergedStyle;
-            if (C === mergeStartCol) { // Only set value for the first cell in the merged range
-              cell.v = 'Выходной';
-              cell.t = 's'; // Set type to string
-            } else {
-              delete cell.v; // Clear content for other merged cells
+        if (isHeaderRow) {
+          // Apply header style to all cells in the header row
+          cell.s = headerStyle;
+        } else {
+          // Data rows
+          if (isCurrentDayOff) {
+            if (C === 0) { // Date column for off-day
+              cell.s = dataStyle; // Keep existing date value, apply dataStyle
+            } else if (C >= mergeStartCol && C <= mergeEndCol) { // Cells within the merged range for off-day
+              cell.s = offDayMergedStyle;
+              if (C === mergeStartCol) { // Only set value for the first cell in the merged range
+                cell.v = 'Выходной';
+                cell.t = 's'; // Set type to string
+              } else {
+                delete cell.v; // Clear content for other merged cells
+              }
+            } else { // RawData column or any other column beyond visible merged range
+              cell.s = dataStyle;
             }
-          } else { // Other columns (e.g., rawData or columns beyond visible merged range)
+          } else {
+            // Apply regular data style (centered) to all cells in non-off-day rows
             cell.s = dataStyle;
           }
-        }
-      } else {
-        // Apply regular data style (centered) to all cells in non-off-day rows
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-          const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
-          cell.s = dataStyle;
         }
       }
     }
