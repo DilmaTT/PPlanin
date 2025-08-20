@@ -303,74 +303,81 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         }
       });
 
-      // Create the base object with the wch property.
       const colDef: { wch: number; hidden?: boolean } = { wch: maxWidth + 2 };
-
-      // Conditionally add the hidden property for the rawData column.
       if (col.id === 'rawData') {
         colDef.hidden = true;
       }
-
       return colDef;
     });
 
     worksheet['!cols'] = colWidths;
 
-    // Styling and Merging for Off Days
     const range = XLSX.utils.decode_range(worksheet['!ref'] as string);
     worksheet['!merges'] = worksheet['!merges'] || [];
 
-    const offDayStyle = {
+    const headerStyle = {
+      font: { bold: true },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    const dataStyle = {
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    const offDayMergedStyle = {
       fill: { fgColor: { rgb: "FFC7CE" } },
       alignment: { horizontal: 'center', vertical: 'center' }
     };
-    const regularStyle = {
-      alignment: { horizontal: 'center', vertical: 'center' }
-    };
-    const headerStyle = {
-      font: { bold: true }, // Added bold font
-      alignment: { horizontal: 'center', vertical: 'center' }
-    };
 
-    // Style Header: Apply center alignment and bold to all header cells
+    // Apply header styles (bold and centered)
     for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cell_ref = XLSX.utils.encode_cell({ c: C, r: range.s.r });
-        // Ensure cell exists before applying style
-        const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {}); 
-        cell.s = headerStyle;
+      const cell_ref = XLSX.utils.encode_cell({ c: C, r: range.s.r });
+      const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
+      cell.s = headerStyle;
     }
 
-    // Style Data Rows: Apply regular style (center alignment) to all cells first
-    // Then, for off-days, apply specific offDayStyle to the merged block.
+    // Apply data styles (centered) and handle "Выходной" rows
     for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-      const currentDate = dateRange[R - 1];
+      const currentDate = dateRange[R - (range.s.r + 1)]; // Adjust index for dateRange
+      const isCurrentDayOff = isOffDay(currentDate);
 
-      // Apply regular style to all cells in the row by default
-      for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-        // Ensure cell exists before applying style
-        const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {}); 
-        cell.s = regularStyle;
-      }
+      if (isCurrentDayOff) {
+        // Handle "Выходной" row: merge, text, and background
+        // Merge from the second visible column (index 1) to the last visible column
+        // The first column (date) should not be merged.
+        const mergeStartCol = 1; // B column
+        const mergeEndCol = activeColumns.length - 1; // Last visible column index
 
-      if (isOffDay(currentDate)) {
-        // Merge all visible cells from the second column to the last visible column
-        if (activeColumns.length > 1) {
-            worksheet['!merges'].push({ s: { r: R, c: 1 }, e: { r: R, c: activeColumns.length - 1 } });
+        if (mergeEndCol >= mergeStartCol) { // Only merge if there's more than just the date column
+          worksheet['!merges'].push({ s: { r: R, c: mergeStartCol }, e: { r: R, c: mergeEndCol } });
         }
 
-        // Apply offDayStyle and content for the merged block (from column 1 onwards for visible columns)
-        for (let C = 1; C <= activeColumns.length - 1; ++C) { // Start from column 1 (B)
+        // Apply style and content to the merged range
+        for (let C = range.s.c; C <= range.e.c; ++C) { // Iterate through all columns in the worksheet
           const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-          const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {});
-          cell.s = offDayStyle; // Apply offDayStyle (red background + center alignment)
+          const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
 
-          if (C === 1) { // This is the start of the merged block
-            cell.v = 'Выходной';
-            cell.t = 's';
-          } else { // Other cells within the visible merged range
-            delete cell.v; // Clear content
+          if (C === 0) { // Column A (Дата)
+            // Keep existing date value, apply dataStyle
+            cell.s = dataStyle;
+          } else if (C >= mergeStartCol && C <= mergeEndCol) { // Within the merged range for visible columns
+            cell.s = offDayMergedStyle;
+            if (C === mergeStartCol) { // Only set value for the first cell in the merged range
+              cell.v = 'Выходной';
+              cell.t = 's'; // Set type to string
+            } else {
+              delete cell.v; // Clear content for other merged cells
+            }
+          } else { // Other columns (e.g., rawData or columns beyond visible merged range)
+            cell.s = dataStyle;
           }
+        }
+      } else {
+        // Apply regular data style (centered) to all cells in non-off-day rows
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+          const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
+          cell.s = dataStyle;
         }
       }
     }
