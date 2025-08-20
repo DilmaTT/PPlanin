@@ -315,11 +315,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     const range = XLSX.utils.decode_range(worksheet['!ref'] as string);
     worksheet['!merges'] = worksheet['!merges'] || [];
 
-    // Define styles
-    const baseCellStyle = {
+    // Define base styles
+    const baseAlignmentStyle = {
       alignment: { horizontal: 'center', vertical: 'center' },
-      t: 's', // Always treat as string
-      z: '@'  // Always use text format
     };
 
     const headerStyle = {
@@ -349,10 +347,20 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
         const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
 
-        // 1. Initialize cell style with base properties
-        cell.s = { ...baseCellStyle };
+        // Ensure cell value exists, even if empty, for style application
+        if (cell.v === undefined) {
+            cell.v = '';
+        }
 
-        // 2. Apply specific styles on top
+        // Explicitly set type and format to string for all cells
+        cell.t = 's';
+        cell.z = '@';
+
+        // Apply base alignment style
+        cell.s = cell.s || {}; // Ensure cell.s is an object
+        Object.assign(cell.s, baseAlignmentStyle); // Merge base alignment style
+
+        // Apply specific styles on top
         if (isHeaderRow) {
           Object.assign(cell.s, headerStyle); // Add header font properties
         } else if (isCurrentDayOff) {
@@ -366,12 +374,6 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
               delete cell.v; // Clear value for merged cells beyond the first
             }
           }
-        }
-
-        // 3. Ensure cell value exists, even if empty, for style application
-        // This is important because XLSX might not apply styles to cells without a 'v' property.
-        if (cell.v === undefined) {
-            cell.v = '';
         }
       }
     }
