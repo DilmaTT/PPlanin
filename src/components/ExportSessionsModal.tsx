@@ -323,9 +323,9 @@ import { useState } from 'react';
           if (rowNumber === 1) {
             row.font = { bold: true };
           } else {
-            // Check for "Выходной" (Day Off) rows using the 'date' column value
-            const dateCell = row.getCell('date'); // Access by key 'date'
-            if (dateCell && dateCell.value === 'Выходной') {
+            // Check for "Выходной" (Day Off) rows using the 'rawData' column value
+            const rawDataCell = row.getCell('rawData'); // Access by key 'rawData'
+            if (rawDataCell && rawDataCell.value === '[]') { // Check if rawData is an empty array (indicating an off-day)
               row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = {
                   type: 'pattern',
