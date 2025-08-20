@@ -299,11 +299,13 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
           }
         }
       });
-      return { header: col.label, key: col.id, width: maxWidth + 2 };
+      // Add three spaces padding to each header
+      const paddedHeader = `   ${col.label}   `;
+      return { header: paddedHeader, key: col.id, width: maxWidth + 2 + 6 }; // +6 for the 6 spaces
     });
 
     // Add the hidden rawData column for internal use
-    excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 }); // Removed hidden: true here
+    excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
     worksheet.columns = excelColumns;
     worksheet.getColumn('rawData').hidden = true; // Set hidden property after defining columns
 
@@ -331,6 +333,19 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
               fgColor: { argb: 'FFC7CE' } // Light red background
             };
           });
+
+          // Merge cells from the second column (B) to the last visible column
+          const allDefinedColumns = worksheet.columns;
+          const rawDataColumnIndex = allDefinedColumns.findIndex(col => col.key === 'rawData');
+          const lastVisibleColumnIndex = rawDataColumnIndex > -1 ? rawDataColumnIndex - 1 : allDefinedColumns.length - 1;
+
+          // Ensure there are at least two columns to merge from B and a target for merge
+          if (allDefinedColumns.length >= 2 && lastVisibleColumnIndex >= 1) { 
+            const firstMergeColumnLetter = allDefinedColumns[1].letter; // Column B
+            const lastMergeColumnLetter = allDefinedColumns[lastVisibleColumnIndex].letter;
+
+            worksheet.mergeCells(`${firstMergeColumnLetter}${rowNumber}:${lastMergeColumnLetter}${rowNumber}`);
+          }
         }
       }
     });
