@@ -21,6 +21,7 @@ import { ru } from 'date-fns/locale';
 import { useStorage } from '@/hooks/useStorage';
 import type { Session, SessionPeriod } from '@/types';
 
+// Define visible columns for the UI and general export structure
 const columns = [
   { id: 'date', label: 'Дата' },
   { id: 'sessionCount', label: 'Кол-во сессий' },
@@ -97,7 +98,9 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
   const handleExport = () => {
     // 1. Gather settings
     const activeColumns = columns.filter(col => selectedColumns[col.id]);
-    const headers = activeColumns.map(col => col.label);
+    // Add the rawData column internally for export, it will be hidden later
+    const allExportColumns = [...activeColumns, { id: 'rawData', label: 'Raw Data' }];
+    const headers = allExportColumns.map(col => col.label);
 
     // 2. Determine date range
     let startDate = new Date();
@@ -159,7 +162,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       const dateColumnFormat = buildDateFormatString();
       const formattedDate = dateColumnFormat ? format(currentDate, dateColumnFormat, { locale: ru }) : format(currentDate, 'yyyy-MM-dd', { locale: ru });
 
-      // 5. Format columns based on active selection
+      // Populate visible columns
       activeColumns.forEach(col => {
         switch (col.id) {
           case 'date':
@@ -252,26 +255,49 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             break;
         }
       });
+
+      // Add rawData column
+      if (isOffDay(currentDate)) {
+        row['Raw Data'] = JSON.stringify([]); // Empty array for off-days
+        // For off-days, clear all other visible columns except 'Дата'
+        activeColumns.forEach(col => {
+          if (col.id !== 'date') {
+            row[col.label] = ''; // Clear other columns, will be merged and overwritten by "Выходной"
+          }
+        });
+      } else {
+        row['Raw Data'] = JSON.stringify(daySessions); // Full session data for active days
+      }
+      
       return row;
     });
 
-    // 6. Generate and download XLSX file
+    // 5. Create XLSX-sheet
     const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headers });
 
-    // Auto-fit column widths
-    const maxWidths = headers.map(header => header.length);
-    formattedData.forEach(row => {
-      headers.forEach((header, i) => {
+    // 6. Format XLSX-sheet
+    // Auto-fit column widths for visible columns
+    const visibleHeaders = activeColumns.map(col => col.label);
+    const colWidths = visibleHeaders.map(header => {
+      let maxWidth = header.length;
+      formattedData.forEach(row => {
         const cellValue = row[header];
         if (cellValue) {
           const cellLength = String(cellValue).length;
-          if (cellLength > maxWidths[i]) {
-            maxWidths[i] = cellLength;
+          if (cellLength > maxWidth) {
+            maxWidth = cellLength;
           }
         }
       });
+      return { wch: maxWidth + 2 }; // Add some padding
     });
-    worksheet['!cols'] = maxWidths.map(width => ({ wch: width + 2 }));
+
+    // Find the index of the 'Raw Data' column and hide it
+    const rawDataColIndexInSheet = headers.indexOf('Raw Data');
+    if (rawDataColIndexInSheet !== -1) {
+      colWidths.splice(rawDataColIndexInSheet, 0, { hidden: true }); // Insert hidden property at the correct index
+    }
+    worksheet['!cols'] = colWidths;
 
     // Styling and Merging for Off Days
     const range = XLSX.utils.decode_range(worksheet['!ref'] as string);
@@ -302,23 +328,32 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       const currentDate = dateRange[R - 1];
 
       if (isOffDay(currentDate)) {
-        if (range.e.c > 0) {
-            worksheet['!merges'].push({ s: { r: R, c: 1 }, e: { r: R, c: range.e.c } });
+        // Merge all visible cells from the second column to the last visible column
+        // The first column is 'Дата' (index 0). The second visible column is index 1.
+        // The last visible column is at index `activeColumns.length - 1`.
+        if (activeColumns.length > 1) { // Ensure there's at least one column to merge after 'Дата'
+            worksheet['!merges'].push({ s: { r: R, c: 1 }, e: { r: R, c: activeColumns.length - 1 } });
         }
 
-        for (let C = range.s.c; C <= range.e.c; ++C) {
+        for (let C = range.s.c; C <= range.e.c; ++C) { // Iterate through all columns in the sheet
           const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
           const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {});
           cell.s = offDayStyle;
 
-          if (C === 1) {
+          if (C === 1) { // This is the start of the merged block for visible columns
             cell.v = 'Выходной';
             cell.t = 's';
-          } else if (C > 1) {
-            delete cell.v;
+          } else if (C > 1 && C <= activeColumns.length - 1) { // Other cells within the visible merged range
+            delete cell.v; // Clear content
+          } else if (C === rawDataColIndexInSheet) {
+            // This is the rawData column, its content is already set, and it will be hidden.
+            // No need to modify its value or type here.
+          } else if (C === 0) { // This is the 'Дата' column
+            // Its value is already set in formattedData, just apply style
           }
         }
       } else {
+        // Apply regular style to all visible cells and the rawData column
         for (let C = range.s.c; C <= range.e.c; ++C) {
           const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
           const cell = worksheet[cell_ref];
