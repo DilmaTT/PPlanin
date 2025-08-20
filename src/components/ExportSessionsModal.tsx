@@ -345,6 +345,10 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
         const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
 
+        // Always set type to string and format to text for consistent alignment
+        cell.t = 's';
+        cell.z = '@';
+
         if (isHeaderRow) {
           cell.s = headerStyle; // Apply header style (bold and centered)
         } else {
@@ -353,8 +357,6 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
           cell.s = {
             alignment: { horizontal: 'center', vertical: 'center' }
           };
-          cell.t = 's'; // Set type to string
-          cell.z = '@'; // Set number format to text to ensure alignment is respected
 
           if (isCurrentDayOff) {
             if (C === 0) {
@@ -365,8 +367,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
               cell.s = { ...offDayMergedStyle }; // Assign the full style object including fill and alignment
               if (C === mergeStartCol) {
                 cell.v = 'Выходной';
-                cell.t = 's';
-                cell.z = '@';
+                // cell.t and cell.z are already set to 's' and '@'
               } else {
                 delete cell.v; // Clear value for merged cells beyond the first
               }
