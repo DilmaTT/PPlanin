@@ -128,11 +128,14 @@ import { useState } from 'react';
 
         // 2. Group sessions by day for efficient lookup
         const groupedByDay: Record<string, Session[]> = sessions.reduce((acc, session) => {
-          const dayKey = format(new Date(session.overallStartTime), 'yyyy-MM-dd');
-          if (!acc[dayKey]) {
-            acc[dayKey] = [];
+          // Ensure overallStartTime is not null/undefined before formatting
+          if (session.overallStartTime) {
+            const dayKey = format(new Date(session.overallStartTime), 'yyyy-MM-dd');
+            if (!acc[dayKey]) {
+              acc[dayKey] = [];
+            }
+            acc[dayKey].push(session);
           }
-          acc[dayKey].push(session);
           return acc;
         }, {} as Record<string, Session[]>);
 
@@ -147,7 +150,11 @@ import { useState } from 'react';
           const goalHands = plan?.hands || 0;
 
           // Aggregate data for the day
-          daySessions.sort((a, b) => new Date(a.overallStartTime).getTime() - new Date(b.overallStartTime).getTime());
+          daySessions.sort((a, b) => {
+            const timeA = a.overallStartTime ? new Date(a.overallStartTime).getTime() : 0;
+            const timeB = b.overallStartTime ? new Date(b.overallStartTime).getTime() : 0;
+            return timeA - timeB;
+          });
 
           let totalDurationInSeconds = 0;
           let totalPlayTimeInSeconds = 0;
@@ -156,10 +163,24 @@ import { useState } from 'react';
           const allNotes: string[] = [];
 
           daySessions.forEach(session => {
-            totalDurationInSeconds += (new Date(session.overallEndTime).getTime() - new Date(session.overallStartTime).getTime()) / 1000;
-            const calculateDurationInSeconds = (type: SessionPeriod['type']) =>
-              (session.periods?.filter(p => p.type === type)
-                .reduce((acc, p) => acc + (new Date(p.endTime).getTime() - new Date(p.startTime).getTime()), 0) ?? 0) / 1000;
+            const sessionStartTime = session.overallStartTime ? new Date(session.overallStartTime) : null;
+            const sessionEndTime = session.overallEndTime ? new Date(session.overallEndTime) : null;
+
+            if (sessionStartTime && sessionEndTime && !isNaN(sessionStartTime.getTime()) && !isNaN(sessionEndTime.getTime())) {
+              totalDurationInSeconds += (sessionEndTime.getTime() - sessionStartTime.getTime()) / 1000;
+            }
+
+            const calculateDurationInSeconds = (type: SessionPeriod['type']) => {
+              return (session.periods?.filter(p => p.type === type)
+                .reduce((acc, p) => {
+                  const periodStartTime = p.startTime ? new Date(p.startTime) : null;
+                  const periodEndTime = p.endTime ? new Date(p.endTime) : null;
+                  if (periodStartTime && periodEndTime && !isNaN(periodStartTime.getTime()) && !isNaN(periodEndTime.getTime())) {
+                    return acc + (periodEndTime.getTime() - periodStartTime.getTime());
+                  }
+                  return acc;
+                }, 0) ?? 0) / 1000;
+            };
             totalPlayTimeInSeconds += calculateDurationInSeconds('play');
             totalSelectTimeInSeconds += calculateDurationInSeconds('select');
             totalHandsPlayed += session.handsPlayed || 0;
@@ -192,14 +213,16 @@ import { useState } from 'react';
                 if (daySessions.length === 1) {
                   const startTime = firstSession.overallStartTime ? new Date(firstSession.overallStartTime) : undefined;
                   const endTime = firstSession.overallEndTime ? new Date(firstSession.overallEndTime) : undefined;
-                  const startTimePart = startTime ? format(startTime, 'HH:mm') : '';
-                  const endTimePart = endTime ? format(endTime, 'HH:mm') : '';
+                  const startTimePart = startTime && !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : '';
+                  const endTimePart = endTime && !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : '';
                   row[col.id] = `${datePart} ${startTimePart}-${endTimePart}`;
                 } else {
                   const timeRanges = daySessions.map(session => {
-                    const startTime = session.overallStartTime ? format(new Date(session.overallStartTime), 'HH:mm') : '';
-                    const endTime = session.overallEndTime ? format(new Date(session.overallEndTime), 'HH:mm') : '';
-                    return `(${startTime}-${endTime})`;
+                    const startTime = session.overallStartTime ? new Date(session.overallStartTime) : undefined;
+                    const endTime = session.overallEndTime ? new Date(session.overallEndTime) : undefined;
+                    const startTimePart = startTime && !isNaN(startTime.getTime()) ? format(startTime, 'HH:mm') : '';
+                    const endTimePart = endTime && !isNaN(endTime.getTime()) ? format(endTime, 'HH:mm') : '';
+                    return `(${startTimePart}-${endTimePart})`;
                   }).join(' ');
                   row[col.id] = `${datePart} ${timeRanges}`;
                 }
