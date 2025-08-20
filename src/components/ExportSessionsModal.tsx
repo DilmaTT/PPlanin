@@ -16,7 +16,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { subDays, subMonths, format, isWithinInterval, startOfDay, eachDayOfInterval, endOfDay as getEndOfDay } from 'date-fns';
+import { subDays, subMonths, format, startOfDay, eachDayOfInterval, endOfDay as getEndOfDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Session, SessionPeriod } from '@/types';
 
@@ -140,9 +140,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
 
       // Aggregate data for the day
       daySessions.sort((a, b) => new Date(a.overallStartTime).getTime() - new Date(b.overallStartTime).getTime());
-      const firstSession = daySessions[0];
-      const lastSession = daySessions[daySessions.length - 1];
-
+      
       let totalDurationInSeconds = 0;
       let totalPlayTimeInSeconds = 0;
       let totalSelectTimeInSeconds = 0;
@@ -172,12 +170,23 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             row[col.label] = daySessions.length;
             break;
           case 'sessionDateTime': {
-            const startTime = new Date(firstSession.overallStartTime);
-            const endTime = new Date(lastSession.overallEndTime);
-            const datePart = format(startTime, 'd MMMM yyyy', { locale: ru });
-            const startTimePart = format(startTime, 'HH:mm');
-            const endTimePart = format(endTime, 'HH:mm');
-            row[col.label] = `${datePart} ${startTimePart}-${endTimePart}`;
+            const firstSession = daySessions[0];
+            const datePart = format(new Date(firstSession.overallStartTime), 'd MMMM yyyy', { locale: ru });
+
+            if (daySessions.length === 1) {
+              const startTime = new Date(firstSession.overallStartTime);
+              const endTime = new Date(firstSession.overallEndTime);
+              const startTimePart = format(startTime, 'HH:mm');
+              const endTimePart = format(endTime, 'HH:mm');
+              row[col.label] = `${datePart} ${startTimePart}-${endTimePart}`;
+            } else {
+              const timeRanges = daySessions.map(session => {
+                const startTime = format(new Date(session.overallStartTime), 'HH:mm');
+                const endTime = format(new Date(session.overallEndTime), 'HH:mm');
+                return `(${startTime}-${endTime})`;
+              }).join(' ');
+              row[col.label] = `${datePart} ${timeRanges}`;
+            }
             break;
           }
           case 'totalTime':
