@@ -124,10 +124,10 @@ export const useStorage = () => {
 
   const updateSettings = useCallback((newSettings: Partial<Settings>) => {
     setStoredSettings((prevSettings) => {
-      // A more robust merge for full import/export compatibility
+      // The initial spread handles replacing entire objects like `plans` and `offDays` correctly.
       const updated = { ...prevSettings, ...newSettings };
 
-      // Deep merge nested objects if they exist in newSettings
+      // Deep merge is only needed for objects that receive partial updates, like `goals`.
       if (newSettings.goals) {
         updated.goals = {
           ...(prevSettings.goals || defaultSettings.goals),
@@ -142,6 +142,9 @@ export const useStorage = () => {
         };
       }
 
+      // The previous implementation had a bug here: it was re-merging `plans` and `offDays`
+      // with the old state, which prevented deletions. By removing those blocks,
+      // we trust that the calling function provides the complete new object for `plans` and `offDays`.
       return updated;
     });
   }, [setStoredSettings]);
@@ -208,28 +211,39 @@ export const useStorage = () => {
   };
 
   const applyWeeklySchedule = useCallback((startDate: Date, endDate: Date, weeklySchedule: WeeklySchedule) => {
+    console.log('useStorage: applyWeeklySchedule запущена');
     let currentDate = startOfDay(startDate);
     const end = startOfDay(endDate);
+
+    // Create mutable copies of plans and offDays to update in the loop
+    const updatedPlans = { ...(settings.plans || {}) };
+    const updatedOffDays = { ...(settings.offDays || {}) };
 
     while (currentDate <= end) {
       const dayOfWeek = currentDate.getDay(); // 0 for Sunday, 1 for Monday, ..., 6 for Saturday
       const scheduleForDay = weeklySchedule[dayOfWeek];
+      const dateString = format(startOfDay(currentDate), 'yyyy-MM-dd');
+
+      console.log('useStorage: Обрабатывается дата:', currentDate, 'План:', scheduleForDay);
 
       if (scheduleForDay) {
         if (scheduleForDay.isOff) {
-          setOffDay(currentDate, true);
-          setPlanForDate(currentDate, { hours: 0, hands: 0 }); // Clear any existing plan if it's an off day
+          updatedOffDays[dateString] = true;
+          delete updatedPlans[dateString]; // Clear any existing plan if it's an off day
         } else {
-          setOffDay(currentDate, false);
-          setPlanForDate(currentDate, {
+          delete updatedOffDays[dateString];
+          updatedPlans[dateString] = {
             hours: scheduleForDay.hours,
             hands: scheduleForDay.hands,
-          });
+          };
         }
       }
       currentDate = addDays(currentDate, 1);
     }
-  }, [setPlanForDate, setOffDay]);
+
+    // Update settings once after the loop
+    updateSettings({ plans: updatedPlans, offDays: updatedOffDays });
+  }, [settings.plans, settings.offDays, updateSettings]);
 
   return {
     sessions,

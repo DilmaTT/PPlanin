@@ -15,6 +15,7 @@ import { ru } from 'date-fns/locale';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Calendar as ShadcnCalendar } from '@/components/ui/calendar';
+import { useToast } from '@/hooks/use-toast';
 
 type ValuePiece = Date | null;
 type CalendarValue = ValuePiece | [ValuePiece, ValuePiece];
@@ -27,10 +28,9 @@ type WeeklyScheduleDay = {
 
 const PlanningPage = () => {
   const { getPlanForDate, setPlanForDate, isOffDay, setOffDay, applyWeeklySchedule } = useStorage();
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [plan, setPlan] = useState<Partial<Plan>>({ hours: 0, hands: 0 });
-  // 1. Создаем новое локальное состояние для чекбокса
-  const [isOffDayChecked, setIsOffDayChecked] = useState(false);
 
   const [weeklySchedule, setWeeklySchedule] = useState<Record<number, WeeklyScheduleDay>>({
     1: { hours: 0, hands: 0, isOff: false }, // Monday
@@ -45,6 +45,9 @@ const PlanningPage = () => {
   const [applyEndDate, setApplyEndDate] = useState<Date | undefined>(new Date());
 
   const dayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+  
+  // Derive isOff directly from the hook, removing local state
+  const isDayOffForSelectedDate = isOffDay(selectedDate);
 
   useEffect(() => {
     const existingPlan = getPlanForDate(selectedDate);
@@ -52,9 +55,7 @@ const PlanningPage = () => {
       hours: existingPlan?.hours || 0,
       hands: existingPlan?.hands || 0,
     });
-    // 2. Синхронизируем локальное состояние с глобальным при изменении даты
-    setIsOffDayChecked(isOffDay(selectedDate));
-  }, [selectedDate, getPlanForDate, isOffDay]);
+  }, [selectedDate, getPlanForDate]);
 
   const handleDateChange = (value: CalendarValue) => {
     if (value instanceof Date) {
@@ -64,7 +65,15 @@ const PlanningPage = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setPlan(prev => ({ ...prev, [name]: Number(value) }));
+    let numValue = Number(value);
+
+    if (name === 'hours') {
+      if (numValue < 0) numValue = 0;
+      if (numValue > 24) numValue = 24;
+    } else if (name === 'hands') {
+      if (numValue < 0) numValue = 0;
+    }
+    setPlan(prev => ({ ...prev, [name]: numValue }));
   };
 
   const handleSave = () => {
@@ -73,34 +82,47 @@ const PlanningPage = () => {
       hands: plan.hands || 0,
     };
     setPlanForDate(selectedDate, planToSave);
-    // Force re-render of calendar tiles by creating a new date object
+    // Force calendar tile refresh
     setSelectedDate(new Date(selectedDate.getTime()));
   };
 
   const handleOffDayChange = (checked: boolean | 'indeterminate') => {
     const newIsDayOffState = typeof checked === 'boolean' ? checked : false;
-    // 3. Сначала обновляем локальное состояние для мгновенного визуального отклика
-    setIsOffDayChecked(newIsDayOffState);
-    // Затем обновляем глобальное состояние
     setOffDay(selectedDate, newIsDayOffState);
-    // Force re-render of calendar tiles
-    setSelectedDate(new Date(selectedDate.getTime()));
   };
 
   const handleWeeklyScheduleChange = (dayIndex: number, field: keyof WeeklyScheduleDay, value: any) => {
-    setWeeklySchedule(prev => ({
-      ...prev,
-      [dayIndex]: {
-        ...prev[dayIndex],
-        [field]: value,
-      },
-    }));
+    setWeeklySchedule(prev => {
+      let validatedValue = value;
+      if (field === 'hours') {
+        let numValue = Number(value);
+        if (numValue < 0) numValue = 0;
+        if (numValue > 24) numValue = 24;
+        validatedValue = numValue;
+      } else if (field === 'hands') {
+        let numValue = Number(value);
+        if (numValue < 0) numValue = 0;
+        validatedValue = numValue;
+      }
+
+      return {
+        ...prev,
+        [dayIndex]: {
+          ...prev[dayIndex],
+          [field]: validatedValue,
+        },
+      };
+    });
   };
 
   const handleApplyWeeklySchedule = () => {
     if (applyStartDate && applyEndDate) {
       applyWeeklySchedule(applyStartDate, applyEndDate, weeklySchedule);
-      // Force calendar re-render after applying schedule
+      toast({
+        title: 'Расписание применено',
+        description: 'Недельное расписание успешно применено к выбранному диапазону дат.',
+      });
+      // Force calendar refresh to show new plans/off-days
       setSelectedDate(new Date(selectedDate.getTime()));
     }
   };
@@ -153,7 +175,7 @@ const PlanningPage = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <fieldset disabled={isOffDayChecked} className="space-y-4">
+              <fieldset disabled={isDayOffForSelectedDate} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="hours">Цель (часы)</Label>
                   <Input
@@ -181,13 +203,13 @@ const PlanningPage = () => {
               <div className="flex items-center space-x-2 pt-2">
                 <Checkbox
                   id="off-day-checkbox"
-                  checked={isOffDayChecked}
+                  checked={isDayOffForSelectedDate}
                   onCheckedChange={handleOffDayChange}
                 />
                 <Label htmlFor="off-day-checkbox">Выходной</Label>
               </div>
 
-              <Button onClick={handleSave} className="w-full" disabled={isOffDayChecked}>
+              <Button onClick={handleSave} className="w-full" disabled={isDayOffForSelectedDate}>
                 Сохранить
               </Button>
             </CardContent>
@@ -203,11 +225,10 @@ const PlanningPage = () => {
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 gap-4">
               {Object.keys(weeklySchedule).sort((a, b) => {
-                // Sort days from Monday (1) to Sunday (0)
                 const dayA = parseInt(a);
                 const dayB = parseInt(b);
-                if (dayA === 0) return 1; // Sunday to end
-                if (dayB === 0) return -1; // Sunday to end
+                if (dayA === 0) return 1;
+                if (dayB === 0) return -1;
                 return dayA - dayB;
               }).map(dayIndexStr => {
                 const dayIndex = parseInt(dayIndexStr);
@@ -224,7 +245,7 @@ const PlanningPage = () => {
                           type="number"
                           placeholder="Часы"
                           value={day.hours || ''}
-                          onChange={(e) => handleWeeklyScheduleChange(dayIndex, 'hours', Number(e.target.value))}
+                          onChange={(e) => handleWeeklyScheduleChange(dayIndex, 'hours', e.target.value)}
                           disabled={day.isOff}
                           className="w-full"
                         />
@@ -237,7 +258,7 @@ const PlanningPage = () => {
                           type="number"
                           placeholder="Руки"
                           value={day.hands || ''}
-                          onChange={(e) => handleWeeklyScheduleChange(dayIndex, 'hands', Number(e.target.value))}
+                          onChange={(e) => handleWeeklyScheduleChange(dayIndex, 'hands', e.target.value)}
                           disabled={day.isOff}
                           className="w-full"
                         />
@@ -246,7 +267,7 @@ const PlanningPage = () => {
                         <Checkbox
                           id={`off-day-${dayIndex}`}
                           checked={day.isOff}
-                          onCheckedChange={(checked: boolean) => handleWeeklyScheduleChange(dayIndex, 'isOff', checked)}
+                          onCheckedChange={(checked) => handleWeeklyScheduleChange(dayIndex, 'isOff', !!checked)}
                         />
                         <Label htmlFor={`off-day-${dayIndex}`}>Выходной</Label>
                       </div>
