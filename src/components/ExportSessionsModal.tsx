@@ -12,8 +12,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Calendar }
- from '@/components/ui/calendar';
+import { Calendar
+ } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
@@ -183,7 +183,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             row[col.label] = formattedDate;
             break;
           case 'sessionCount':
-            row[col.label] = daySessions.length > 0 ? daySessions.length : '0/-';
+            row[col.label] = daySessions.length > 0 ? daySessions.length : '';
             break;
           case 'sessionDateTime': {
             if (daySessions.length === 0) {
@@ -210,24 +210,24 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             break;
           }
           case 'totalTime':
-            row[col.label] = daySessions.length > 0 ? formatDuration(totalDurationInSeconds) : '-';
+            row[col.label] = daySessions.length > 0 ? formatDuration(totalDurationInSeconds) : '';
             break;
           case 'playTime':
-            row[col.label] = daySessions.length > 0 ? formatDuration(totalPlayTimeInSeconds) : '-';
+            row[col.label] = daySessions.length > 0 ? formatDuration(totalPlayTimeInSeconds) : '';
             break;
           case 'selectTime':
-            row[col.label] = daySessions.length > 0 ? formatDuration(totalSelectTimeInSeconds) : '-';
+            row[col.label] = daySessions.length > 0 ? formatDuration(totalSelectTimeInSeconds) : '';
             break;
           case 'planHours':
-            row[col.label] = goalHours > 0 ? goalHours : '-';
+            row[col.label] = goalHours > 0 ? goalHours : '';
             break;
           case 'planHands':
-            row[col.label] = goalHands > 0 ? goalHands : '-';
+            row[col.label] = goalHands > 0 ? goalHands : '';
             break;
           case 'planRemaining': {
             if (goalHours > 0) {
               const remainingSeconds = (goalHours * 3600) - totalPlayTimeInSeconds;
-              const sign = remainingSeconds < 0 ? '-' : '';
+              const sign = remainingSeconds < 0 ? '' : '';
               const absSeconds = Math.abs(remainingSeconds);
 
               switch (planRemainingFormat) {
@@ -252,18 +252,18 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
                 }
               }
             } else {
-              row[col.label] = '-';
+              row[col.label] = '';
             }
             break;
           }
           case 'hands':
-            row[col.label] = daySessions.length > 0 ? totalHandsPlayed : '-';
+            row[col.label] = daySessions.length > 0 ? totalHandsPlayed : '';
             break;
           case 'handsPerHour':
-            row[col.label] = totalPlayTimeInHours > 0 ? Math.round(totalHandsPlayed / totalPlayTimeInHours) : (daySessions.length > 0 ? 0 : '-');
+            row[col.label] = totalPlayTimeInHours > 0 ? Math.round(totalHandsPlayed / totalPlayTimeInHours) : (daySessions.length > 0 ? 0 : '');
             break;
           case 'notes':
-            row[col.label] = allNotes.join('; ') || (daySessions.length > 0 ? '' : '-');
+            row[col.label] = allNotes.join('; ') || (daySessions.length > 0 ? '' : '');
             break;
           default:
             break;
@@ -328,10 +328,11 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       alignment: { horizontal: 'center', vertical: 'center' }
     };
     const headerStyle = {
+      font: { bold: true }, // Added bold font
       alignment: { horizontal: 'center', vertical: 'center' }
     };
 
-    // Style Header: Apply center alignment to all header cells
+    // Style Header: Apply center alignment and bold to all header cells
     for (let C = range.s.c; C <= range.e.c; ++C) {
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: range.s.r });
         const cell = worksheet[cell_ref];
