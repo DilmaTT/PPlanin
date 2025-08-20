@@ -16,7 +16,18 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import type { DateRange } from 'react-day-picker';
-import { subDays, subMonths, format, startOfDay, eachDayOfInterval, endOfDay as getEndOfDay } from 'date-fns';
+import { 
+  subDays, 
+  subMonths, 
+  format, 
+  startOfDay, 
+  eachDayOfInterval, 
+  endOfDay as getEndOfDay,
+  startOfWeek, // Added
+  endOfWeek,   // Added
+  startOfMonth, // Added
+  endOfMonth    // Added
+} from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useStorage } from '@/hooks/useStorage';
 import type { Session, SessionPeriod } from '@/types';
@@ -105,11 +116,14 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
     // 2. Determine date range
     let startDate = new Date();
     let endDate = new Date();
+    const today = new Date();
 
     if (period === 'week') {
-      startDate = subDays(new Date(), 7);
+      startDate = startOfWeek(today, { weekStartsOn: 1 }); // Monday of current week
+      endDate = endOfWeek(today, { weekStartsOn: 1 });     // Sunday of current week
     } else if (period === 'month') {
-      startDate = subMonths(new Date(), 1);
+      startDate = startOfMonth(today); // First day of current month
+      endDate = endOfMonth(today);     // Last day of current month
     } else if (period === 'custom' && date?.from) {
       startDate = date.from;
       endDate = date.to || date.from;
@@ -169,7 +183,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
             row[col.label] = formattedDate;
             break;
           case 'sessionCount':
-            row[col.label] = daySessions.length;
+            row[col.label] = daySessions.length > 0 ? daySessions.length : '0/-';
             break;
           case 'sessionDateTime': {
             if (daySessions.length === 0) {
@@ -317,7 +331,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       alignment: { horizontal: 'center', vertical: 'center' }
     };
 
-    // Style Header
+    // Style Header: Apply center alignment to all header cells
     for (let C = range.s.c; C <= range.e.c; ++C) {
         const cell_ref = XLSX.utils.encode_cell({ c: C, r: range.s.r });
         const cell = worksheet[cell_ref];
@@ -326,42 +340,37 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         }
     }
 
-    // Style Data Rows
+    // Style Data Rows: Apply regular style (center alignment) to all cells first
+    // Then, for off-days, apply specific offDayStyle to the merged block.
     for (let R = range.s.r + 1; R <= range.e.r; ++R) {
       const currentDate = dateRange[R - 1];
 
+      // Apply regular style to all cells in the row by default
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
+        const cell = worksheet[cell_ref];
+        if (cell) {
+          cell.s = regularStyle;
+        }
+      }
+
       if (isOffDay(currentDate)) {
         // Merge all visible cells from the second column to the last visible column
-        // The first column is 'Дата' (index 0). The second visible column is index 1.
-        // The last visible column is at index `activeColumns.length - 1`.
-        if (activeColumns.length > 1) { // Ensure there's at least one column to merge after 'Дата'
+        if (activeColumns.length > 1) {
             worksheet['!merges'].push({ s: { r: R, c: 1 }, e: { r: R, c: activeColumns.length - 1 } });
         }
 
-        for (let C = range.s.c; C <= range.e.c; ++C) { // Iterate through all columns in the sheet
+        // Apply offDayStyle and content for the merged block (from column 1 onwards for visible columns)
+        for (let C = 1; C <= activeColumns.length - 1; ++C) { // Start from column 1 (B)
           const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
           const cell = worksheet[cell_ref] || (worksheet[cell_ref] = {});
-          cell.s = offDayStyle;
+          cell.s = offDayStyle; // Apply offDayStyle (red background + center alignment)
 
-          if (C === 1) { // This is the start of the merged block for visible columns
+          if (C === 1) { // This is the start of the merged block
             cell.v = 'Выходной';
             cell.t = 's';
-          } else if (C > 1 && C <= activeColumns.length - 1) { // Other cells within the visible merged range
+          } else { // Other cells within the visible merged range
             delete cell.v; // Clear content
-          } else if (C === allExportColumns.findIndex(col => col.id === 'rawData')) {
-            // This is the rawData column, its content is already set, and it will be hidden.
-            // No need to modify its value or type here.
-          } else if (C === 0) { // This is the 'Дата' column
-            // Its value is already set in formattedData, just apply style
-          }
-        }
-      } else {
-        // Apply regular style to all visible cells and the rawData column
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-          const cell = worksheet[cell_ref];
-          if (cell) {
-            cell.s = regularStyle;
           }
         }
       }
@@ -528,6 +537,7 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
                   selected={date}
                   onSelect={setDate}
                   numberOfMonths={1}
+                  weekStartsOn={1}
                 />
               </div>
             )}
