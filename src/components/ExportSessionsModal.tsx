@@ -335,25 +335,37 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
         const cell = worksheet[cell_ref] = worksheet[cell_ref] || {}; // Ensure cell exists
 
         // Ensure cell value exists, even if empty, for style application
-        if (cell.v === undefined) {
+        // This is crucial for styles to apply to truly empty cells
+        if (cell.v === undefined || cell.v === null) {
             cell.v = '';
         }
+
+        // Initialize cell.s with base styles first
+        cell.s = {
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: "FFFF0000" } }, // Red background
+            font: {
+                name: 'Arial',
+                sz: 14, // Larger font size
+                color: { rgb: "FF0000FF" }, // Blue font color
+                bold: true // Bold text
+            },
+            border: {
+                top: { style: "thin", color: { rgb: "FF000000" } },
+                bottom: { style: "thin", color: { rgb: "FF000000" } },
+                left: { style: "thin", color: { rgb: "FF000000" } },
+                right: { style: "thin", color: { rgb: "FF000000" } }
+            }
+        };
 
         // Explicitly set type and format to string for all cells
         cell.t = 's';
         cell.z = '@';
 
-        // Initialize cell.s as a new object for each cell with base styles
-        cell.s = {
-            alignment: { horizontal: 'center', vertical: 'center' },
-            fill: { fgColor: { rgb: "FFFF0000" } }, // Default red background for all cells
-            font: {}, // Initialize font to an empty object
-            border: {} // Initialize border to an empty object if needed
-        };
-
         // Apply specific styles on top
         if (isHeaderRow) {
           cell.s.font.bold = true; // Set bold property on the font object
+          cell.s.font.color = { rgb: "FF000000" }; // Black font for headers
         } else if (isCurrentDayOff) {
           if (C === 0) {
             // Date column for off-day, already has base style
