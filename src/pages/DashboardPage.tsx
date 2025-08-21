@@ -1,5 +1,6 @@
 export default function DashboardPage() {
   console.log('DashboardPage rendered - minimal version'); // Лог для подтверждения рендеринга компонента
+  console.log('TEST DIV is being rendered in minimal DashboardPage'); // Перемещено за пределы JSX
 
   return (
     <div style={{
@@ -15,7 +16,6 @@ export default function DashboardPage() {
       height: 'fit-content'
     }}>
       ТЕСТОВЫЙ DIV
-      {console.log('TEST DIV is being rendered in minimal DashboardPage')}
     </div>
   );
 }
