@@ -110,36 +110,36 @@ const DataPage = () => {
         const workbook = read(data, { type: 'binary' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const json = utils.sheet_to_json(worksheet) as any[];
+        const jsonData = utils.sheet_to_json(worksheet) as any[];
 
         // Шаг 1: Данные из XLSX
-        console.log('Шаг 1: Данные из XLSX:', json);
+        console.log('Шаг 1: Данные из XLSX:', jsonData);
 
-        const allImportedSessions: Session[] = [];
-
-        json.forEach(row => {
-          // Check for the 'rawData' key or empty string key or __EMPTY which contains the JSON string of sessions for that day
-          const rawDataString = row['Raw Data'] || row[''] || row['__EMPTY']; 
+        const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
+          // Получаем сырые данные из колонки '__EMPTY__'
+          const rawData = row['__EMPTY']; 
           
-          if (typeof rawDataString === 'string' && rawDataString.startsWith('[') && rawDataString !== 'IS_OFF_DAY') {
+          // Добавляем проверку: если rawData — это строка, которая начинается с символа '['
+          if (typeof rawData === 'string' && rawData.startsWith('[')) {
             try {
-              const daySessions: Session[] = JSON.parse(rawDataString);
+              const daySessions: Session[] = JSON.parse(rawData);
               // Шаг 2: Распарсенные сессии из строки
               console.log('Шаг 2: Распарсенные сессии из строки:', daySessions);
-              allImportedSessions.push(...daySessions);
+              acc.push(...daySessions);
             } catch (parseError) {
               console.warn('Failed to parse rawData for a row, skipping:', row, parseError);
-              // Optionally, you could toast a warning here for individual row failures
+              // Можно добавить toast для предупреждения о пропущенных строках
             }
           }
-        });
+          return acc;
+        }, []);
 
         // Шаг 3: Финальный массив для сохранения
-        console.log('Шаг 3: Финальный массив для сохранения:', allImportedSessions);
-        importSessions(allImportedSessions);
+        console.log('Шаг 3: Финальный массив для сохранения:', allSessionsToImport);
+        importSessions(allSessionsToImport);
         toast({
           title: 'Импорт сессий успешен',
-          description: `Успешно загружено ${allImportedSessions.length} сессий.`,
+          description: `Успешно загружено ${allSessionsToImport.length} сессий.`,
         });
 
       } catch (error) {
