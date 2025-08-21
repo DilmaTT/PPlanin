@@ -12,7 +12,7 @@ const DataPage = () => {
   const { toast } = useToast();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const sessionsFileInputRef = useRef<HTMLInputElement>(null);
-  const [isExportModal, setIsExportModal] = useState(false); // Изменено: isExportModalOpen удалено, isExportModal теперь переменная состояния
+  const [isExportModal, setIsExportModal] = useState(false);
 
   const handleSettingsExport = () => {
     try {
@@ -118,14 +118,23 @@ const DataPage = () => {
         const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
           console.log('Итерация reduce. Текущая строка:', row);
 
-          const rawData = row['__EMPTY']; // ИСПРАВЛЕННЫЙ КЛЮЧ
-          console.log('Значение из колонки __EMPTY:', rawData);
+          // ИСПРАВЛЕНО: Используем ключ 'Raw Data' или 'RawData'
+          // sheet_to_json может преобразовать "Raw Data" в "Raw Data" или "RawData"
+          // Проверим оба варианта или используем более надежный способ
+          const rawData = row['Raw Data'] || row['RawData']; 
+          console.log('Значение из колонки "Raw Data":', rawData);
 
           if (typeof rawData === 'string' && rawData.startsWith('[')) {
             console.log('Условие пройдено! Пытаюсь парсить JSON.');
             try {
               const sessionsFromRow = JSON.parse(rawData);
-              acc.push(...sessionsFromRow);
+              // Убедимся, что sessionsFromRow - это массив, даже если он содержит одну сессию
+              if (Array.isArray(sessionsFromRow)) {
+                acc.push(...sessionsFromRow);
+              } else if (sessionsFromRow && typeof sessionsFromRow === 'object') {
+                // Если это один объект сессии, обернем его в массив
+                acc.push(sessionsFromRow);
+              }
             } catch (error) {
               console.error('Ошибка парсинга JSON:', error);
             }
@@ -233,7 +242,7 @@ const DataPage = () => {
         </div>
       </div>
       <ExportSessionsModal 
-        isOpen={isExportModal} // Теперь isExportModal корректно ссылается на переменную состояния
+        isOpen={isExportModal}
         onClose={() => setIsExportModal(false)}
         sessions={sessions}
       />
