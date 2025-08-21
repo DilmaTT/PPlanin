@@ -75,7 +75,7 @@ import { useState } from 'react';
 
     interface ExportSessionsModalProps {
       isOpen: boolean;
-      onClose: () => void;
+      onClose?: () => void;
       sessions: Session[];
     }
 
@@ -385,7 +385,7 @@ import { useState } from 'react';
           console.error("Error exporting Excel file:", error);
         }
 
-        onClose();
+        onClose?.();
       };
 
       return (
