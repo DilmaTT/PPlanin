@@ -254,36 +254,10 @@ import { useState } from 'react';
           return row;
         });
 
-        // 4. Create workbook and worksheet
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet("Sessions");
+        // Define descriptionRowData and totalsRowData here if showTotals is true
+        let descriptionRowData: Record<string, string> = {};
+        let totalsRowData: Record<string, any> = {};
 
-        // 5. Define columns for ExcelJS, calculating width dynamically
-        const dataForWidthCalculation = formattedData.filter(row => !row._raw.isOffDay);
-        const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
-          const headerText = `  ${col.label}  `; // The actual header string with padding
-          let maxWidth = headerText.length; // Initialize with the length of the header text
-
-          dataForWidthCalculation.forEach(row => {
-            const cellValue = row[col.id];
-            if (cellValue !== null && cellValue !== undefined) {
-              const cellString = String(cellValue);
-              if (cellString.length > maxWidth) {
-                maxWidth = cellString.length;
-              }
-            }
-          });
-          return { header: headerText, key: col.id, width: maxWidth + 2 }; // Add 2 for extra padding for data cells
-        });
-
-        excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
-        worksheet.columns = excelColumns;
-        worksheet.getColumn('rawData').hidden = true;
-
-        // 6. Add data to worksheet
-        worksheet.addRows(formattedData);
-
-        // 7. Calculate and add totals if enabled
         if (showTotals) {
           const playingDaysData = formattedData.filter(row => !row._raw.isOffDay);
           const playingDaysCount = playingDaysData.length;
@@ -311,7 +285,7 @@ import { useState } from 'react';
 
             const avgHandsPerHour = totals.daysWithPlayTime > 0 ? Math.round(totals.handsPerHourSum / totals.daysWithPlayTime) : 0;
 
-            const totalsRowData = {
+            totalsRowData = {
               date: playingDaysCount,
               sessionCount: totals.sessionCount,
               totalTime: formatSecondsToHM(totals.totalTime),
@@ -324,7 +298,7 @@ import { useState } from 'react';
               handsPerHour: avgHandsPerHour,
             };
 
-            const descriptionRowData = {
+            descriptionRowData = {
               date: 'Кол-во игровых дней',
               sessionCount: 'Общ. кол-во сессий',
               totalTime: 'общее время',
@@ -335,8 +309,63 @@ import { useState } from 'react';
               hands: 'Всего рук',
               planHands: 'Кол-во рук по плану',
               handsPerHour: 'среднее рук/час',
+              notes: '', // Explicitly empty for notes
+              sessionDateTime: '', // Explicitly empty for sessionDateTime
             };
+          }
+        }
 
+        // 4. Create workbook and worksheet
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet("Sessions");
+
+        // 5. Define columns for ExcelJS, calculating width dynamically
+        const dataForWidthCalculation = formattedData.filter(row => !row._raw.isOffDay);
+        const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
+          const headerText = `  ${col.label}  `; // The actual header string with padding
+          let maxWidth = 0;
+
+          if (showTotals && descriptionRowData[col.id] !== undefined) {
+            // If showTotals is true, start with the length of the description row cell
+            maxWidth = String(descriptionRowData[col.id]).length;
+          } else {
+            // Otherwise, start with the length of the header text
+            maxWidth = headerText.length;
+          }
+
+          dataForWidthCalculation.forEach(row => {
+            const cellValue = row[col.id];
+            if (cellValue !== null && cellValue !== undefined) {
+              const cellString = String(cellValue);
+              if (cellString.length > maxWidth) {
+                maxWidth = cellString.length;
+              }
+            }
+          });
+
+          // Also compare with totalsRowData if showTotals is true and totalsRowData exists for this column
+          if (showTotals && totalsRowData[col.id] !== undefined && totalsRowData[col.id] !== null) {
+            const totalsCellString = String(totalsRowData[col.id]);
+            if (totalsCellString.length > maxWidth) {
+              maxWidth = totalsCellString.length;
+            }
+          }
+
+          return { header: headerText, key: col.id, width: maxWidth + 2 }; // Add 2 for extra padding for data cells
+        });
+
+        excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
+        worksheet.columns = excelColumns;
+        worksheet.getColumn('rawData').hidden = true;
+
+        // 6. Add data to worksheet
+        worksheet.addRows(formattedData);
+
+        // 7. Calculate and add totals if enabled
+        if (showTotals) {
+          const playingDaysCount = formattedData.filter(row => !row._raw.isOffDay).length; // Recalculate playingDaysCount
+
+          if (playingDaysCount > 0) { // Only add totals if there are playing days
             worksheet.addRow([]); // Spacer row
             const totalsRow = worksheet.addRow(totalsRowData);
             totalsRow.font = { bold: true };
@@ -350,7 +379,9 @@ import { useState } from 'react';
 
         // 8. Apply styles to data rows
         worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-          if (rowNumber > worksheet.rowCount - (showTotals ? 3 : 0)) return; // Skip total rows
+          // Adjust rowNumber check to account for potential totals and description rows
+          const totalRowsAdded = showTotals && formattedData.filter(row => !row._raw.isOffDay).length > 0 ? 3 : 0;
+          if (rowNumber > worksheet.rowCount - totalRowsAdded) return; // Skip total and description rows
 
           row.eachCell({ includeEmpty: true }, (cell) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
