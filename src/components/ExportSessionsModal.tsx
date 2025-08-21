@@ -282,7 +282,7 @@ import { useState } from 'react';
             return;
           }
 
-          let maxLength = column.width; // Use initial width as starting point
+          let maxLength = column.header?.length || 10; // Initialize maxLength
           if (column.key) {
             worksheet.getColumn(column.key).eachCell({ includeEmpty: true }, (cell) => {
               const columnLength = cell.value ? String(cell.value).length : 0; // User's requested null/undefined handling
