@@ -363,16 +363,46 @@ import { useState } from 'react';
 
         // 9. Calculate column widths dynamically
         worksheet.columns.forEach(column => {
-          if (!column.key || column.hidden) return;
+          if (!column.key || column.hidden) return; // Пропускаем скрытые колонки или колонки без ключа
+
           let maxLength = 0;
+
+          // Проверяем длину заголовка
+          if (column.header) {
+            maxLength = String(column.header).length;
+          }
+
+          // Проверяем длину каждой ячейки данных в этой колонке
           column.eachCell({ includeEmpty: true }, (cell) => {
-            const cellLength = cell.value ? String(cell.value).length : 0;
+            // Пропускаем ячейку, если она скрыта или является частью объединенной ячейки, которая уже обработана
+            if (cell.isMerged || cell.hidden) return;
+
+            const cellValue = cell.value;
+            let cellLength = 0;
+
+            if (cellValue !== null && cellValue !== undefined) {
+              // Преобразуем значение ячейки в строку для расчета длины
+              // Особо обрабатываем числа и даты, чтобы получить их строковое представление
+              if (typeof cellValue === 'number') {
+                cellLength = String(cellValue).length;
+              } else if (cellValue instanceof Date) {
+                cellLength = format(cellValue, 'dd.MM.yyyy HH:mm:ss').length; // Пример формата, можно настроить
+              } else if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
+                // Обработка RichText (если используется)
+                cellValue.richText.forEach((rt: any) => {
+                  cellLength += rt.text.length;
+                });
+              } else {
+                cellLength = String(cellValue).length;
+              }
+            }
+
             if (cellLength > maxLength) {
               maxLength = cellLength;
             }
           });
-          const headerLength = column.header ? column.header.length : 0;
-          maxLength = Math.max(maxLength, headerLength);
+
+          // Устанавливаем ширину колонки с небольшим запасом
           column.width = maxLength + 2;
         });
 
@@ -385,7 +415,7 @@ import { useState } from 'react';
           console.error("Error exporting Excel file:", error);
         }
 
-        onClose?.(); // Исправлено: добавлена проверка onClose?.()
+        onClose?.();
       };
 
       return (
