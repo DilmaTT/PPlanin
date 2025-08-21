@@ -466,15 +466,15 @@ import { useState } from 'react';
                               <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hm">
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="h" id="fmt-h" />
-                                  <Label htmlFor="fmt-h">Часы (например, 6ч)</Label>
+                                  <Label htmlFor="fmt-h" className="cursor-pointer">Часы (например, 6ч)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="hm" id="fmt-hm" />
-                                  <Label htmlFor="fmt-hm">Часы и минуты (например, 6ч 15мин)</Label>
+                                  <Label htmlFor="fmt-hm" className="cursor-pointer">Часы и минуты (например, 6ч 15мин)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="hms" id="fmt-hms" />
-                                  <Label htmlFor="fmt-hms">Полный формат (05:00:00)</Label>
+                                  <Label htmlFor="fmt-hms" className="cursor-pointer">Полный формат (05:00:00)</Label>
                                 </div>
                               </RadioGroup>
                             </div>
@@ -494,11 +494,11 @@ import { useState } from 'react';
                   </div>
                   <div className="flex items-center space-x-2 mb-2">
                     <RadioGroupItem value="month" id="r2" />
-                    <Label htmlFor="r2" cursor-pointer">За месяц</Label>
+                    <Label htmlFor="r2" className="cursor-pointer">За месяц</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="custom" id="r3" />
-                    <Label htmlFor="r3" cursor-pointer">Свой вариант</Label>
+                    <Label htmlFor="r3" className="cursor-pointer">Свой вариант</Label>
                   </div>
                 </RadioGroup>
                 {period === 'custom' && (
