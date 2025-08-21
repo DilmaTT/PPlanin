@@ -268,14 +268,20 @@ import { useState } from 'react';
           // Add rawData column (hidden in Excel, used for logic)
           if (isOffDay(currentDate)) {
             row['rawData'] = JSON.stringify([]); // Empty array for off-days
-            // For off-days, clear all other visible columns except 'date'
+            
+            // Set the second column to "Выходной" and clear the rest.
+            // The date column is already populated from the switch statement above.
+            let isSecondColumn = true;
             columns.forEach(col => {
               if (col.id !== 'date') {
-                row[col.id] = ''; // Clear other columns
+                if (isSecondColumn) {
+                  row[col.id] = 'Выходной';
+                  isSecondColumn = false;
+                } else {
+                  row[col.id] = '';
+                }
               }
             });
-            // Set the 'date' column to "Выходной" for off-days
-            row['date'] = 'Выходной';
           } else {
             row['rawData'] = JSON.stringify(daySessions); // Full session data for active days
           }
@@ -314,7 +320,7 @@ import { useState } from 'react';
 
         // 7. Apply styles
         worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-          // 1. Сначала примени ко всем ячейкам стиль выравнивания по центру.
+          // Apply center alignment to all cells
           row.eachCell({ includeEmpty: true }, (cell) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
           });
@@ -323,10 +329,10 @@ import { useState } from 'react';
           if (rowNumber === 1) {
             row.font = { bold: true };
           } else {
-            // 2. Затем добавь условие:
+            // Check for off-day rows using the hidden 'rawData' column
             const rawDataCell = row.getCell('rawData');
-            if (rawDataCell && rawDataCell.value === '[]') { // Если день является выходным
-              // Примени светло-красный фон.
+            if (rawDataCell && rawDataCell.value === '[]') {
+              // Apply light red background to the entire row
               row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = {
                   type: 'pattern',
@@ -335,21 +341,14 @@ import { useState } from 'react';
                 };
               });
 
-              // Объедини ячейки с первой видимой колонки до последней видимой колонки
-              const allDefinedColumns = worksheet.columns;
-              const rawDataColumnIndex = allDefinedColumns.findIndex(col => col.key === 'rawData');
-              const lastVisibleColumnIndex = rawDataColumnIndex > -1 ? rawDataColumnIndex - 1 : allDefinedColumns.length - 1;
-
-              // Убедимся, что есть хотя бы одна видимая колонка для объединения
-              if (allDefinedColumns.length >= 1 && lastVisibleColumnIndex >= 0) {
-                const firstMergeColumnLetter = allDefinedColumns[0].letter; // Колонка A (индекс 0)
-                const lastMergeColumnLetter = allDefinedColumns[lastVisibleColumnIndex].letter;
-
-                worksheet.mergeCells(`${firstMergeColumnLetter}${rowNumber}:${lastMergeColumnLetter}${rowNumber}`);
+              // Merge cells from the second column to the last visible column
+              const visibleColumns = worksheet.columns.filter(c => !c.hidden);
+              if (visibleColumns.length > 1) {
+                const firstMergeCol = visibleColumns[1].letter; // Second visible column
+                const lastMergeCol = visibleColumns[visibleColumns.length - 1].letter; // Last visible column
+                worksheet.mergeCells(`${firstMergeCol}${rowNumber}:${lastMergeCol}${rowNumber}`);
               }
             }
-            // else - если это обычный день (с сессиями или без): Никакого фона и объединения применять не нужно.
-            // Это условие не требует явного else-блока, так как стили применяются только в if-блоке.
           }
         });
 
