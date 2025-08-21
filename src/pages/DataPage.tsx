@@ -118,8 +118,8 @@ const DataPage = () => {
         const allImportedSessions: Session[] = [];
 
         json.forEach(row => {
-          // Check for the 'rawData' key which contains the JSON string of sessions for that day
-          const rawDataString = row['rawData']; 
+          // Check for the 'rawData' key or empty string key which contains the JSON string of sessions for that day
+          const rawDataString = row['Raw Data'] || row['']; 
           
           if (typeof rawDataString === 'string' && rawDataString !== 'IS_OFF_DAY') {
             try {
