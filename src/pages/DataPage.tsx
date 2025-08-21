@@ -112,6 +112,9 @@ const DataPage = () => {
         const worksheet = workbook.Sheets[sheetName];
         const json = utils.sheet_to_json(worksheet) as any[];
 
+        // Шаг 1: Данные из XLSX
+        console.log('Шаг 1: Данные из XLSX:', json);
+
         const allImportedSessions: Session[] = [];
 
         json.forEach(row => {
@@ -121,6 +124,8 @@ const DataPage = () => {
           if (typeof rawDataString === 'string' && rawDataString !== 'IS_OFF_DAY') {
             try {
               const daySessions: Session[] = JSON.parse(rawDataString);
+              // Шаг 2: Распарсенные сессии из строки
+              console.log('Шаг 2: Распарсенные сессии из строки:', daySessions);
               allImportedSessions.push(...daySessions);
             } catch (parseError) {
               console.warn('Failed to parse rawData for a row, skipping:', row, parseError);
@@ -129,6 +134,8 @@ const DataPage = () => {
           }
         });
 
+        // Шаг 3: Финальный массив для сохранения
+        console.log('Шаг 3: Финальный массив для сохранения:', allImportedSessions);
         importSessions(allImportedSessions);
         toast({
           title: 'Импорт сессий успешен',
