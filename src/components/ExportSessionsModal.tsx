@@ -259,10 +259,9 @@ import { useState } from 'react';
         const worksheet = workbook.addWorksheet("Sessions");
 
         // 5. Define columns for ExcelJS, calculating width dynamically
-        const dataForWidthCalculation = formattedData.filter(row => !row._raw.isOffDay);
         const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
-          let maxWidth = col.label.length;
-          dataForWidthCalculation.forEach(row => {
+          let maxWidth = col.label.length; // Start with header length
+          formattedData.forEach(row => {
             const cellValue = row[col.id];
             if (cellValue) {
               const cellLength = String(cellValue).length;
