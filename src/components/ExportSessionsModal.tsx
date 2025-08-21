@@ -258,41 +258,30 @@ import { useState } from 'react';
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Sessions");
 
-        const visibleSelectedColumns = columns.filter(col => selectedColumns[col.id]);
+        // 5. Define columns for ExcelJS, calculating width dynamically
+        const dataForWidthCalculation = formattedData.filter(row => !row._raw.isOffDay);
+        const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
+          const headerText = `  ${col.label}  `; // The actual header string with padding
+          let maxWidth = headerText.length; // Initialize with the length of the header text
 
-        // Define columns with initial width from headers
-        const excelColumns = visibleSelectedColumns.map(col => ({
-          header: ` ${col.label} `, // User's requested header format
-          key: col.id,
-          width: col.label.length + 4
-        }));
+          dataForWidthCalculation.forEach(row => {
+            const cellValue = row[col.id];
+            if (cellValue !== null && cellValue !== undefined) {
+              const cellString = String(cellValue);
+              if (cellString.length > maxWidth) {
+                maxWidth = cellString.length;
+              }
+            }
+          });
+          return { header: headerText, key: col.id, width: maxWidth + 2 }; // Add 2 for extra padding for data cells
+        });
 
-        // Add Raw Data column and hide it (preserving existing functionality)
         excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
         worksheet.columns = excelColumns;
         worksheet.getColumn('rawData').hidden = true;
 
-        // Add data rows
+        // 6. Add data to worksheet
         worksheet.addRows(formattedData);
-
-        // Calculate final column widths based on content
-        worksheet.columns.forEach(column => {
-          // Skip rawData column for width calculation as it's hidden
-          if (column.key === 'rawData') {
-            return;
-          }
-
-          let maxLength = column.header?.length || 10; // Initialize maxLength
-          if (column.key) {
-            worksheet.getColumn(column.key).eachCell({ includeEmpty: true }, (cell) => {
-              const columnLength = cell.value ? String(cell.value).length : 0; // User's requested null/undefined handling
-              if (columnLength > maxLength) {
-                maxLength = columnLength;
-              }
-            });
-            column.width = maxLength + 2;
-          }
-        });
 
         // 7. Calculate and add totals if enabled
         if (showTotals) {
