@@ -112,42 +112,34 @@ const DataPage = () => {
         const worksheet = workbook.Sheets[sheetName];
         const json = utils.sheet_to_json(worksheet) as any[];
 
-        const parsedSessions: Session[] = json.map(row => {
-          const startTime = new Date(row['Дата']);
-          if (isNaN(startTime.getTime())) {
-            throw new Error(`Неверный формат даты в строке: ${JSON.stringify(row)}`);
-          }
-          const totalHours = row['Общее время (ч)'] || 0;
-          const endTime = new Date(startTime.getTime() + totalHours * 3600 * 1000);
+        const allImportedSessions: Session[] = [];
 
-          return {
-            id: startTime.toISOString(),
-            overallStartTime: startTime.toISOString(),
-            overallEndTime: endTime.toISOString(),
-            overallDuration: Math.round(totalHours * 3600),
-            handsPlayed: row['Количество рук'] || 0,
-            notes: row['Заметки'] || '',
-            overallProfit: 0,
-            overallHandsPlayed: row['Количество рук'] || 0,
-            periods: [{
-              startTime: startTime.toISOString(),
-              endTime: endTime.toISOString(),
-              type: 'play',
-            }],
-          };
+        json.forEach(row => {
+          // Check for the 'rawData' key which contains the JSON string of sessions for that day
+          const rawDataString = row['rawData']; 
+          
+          if (typeof rawDataString === 'string' && rawDataString !== 'IS_OFF_DAY') {
+            try {
+              const daySessions: Session[] = JSON.parse(rawDataString);
+              allImportedSessions.push(...daySessions);
+            } catch (parseError) {
+              console.warn('Failed to parse rawData for a row, skipping:', row, parseError);
+              // Optionally, you could toast a warning here for individual row failures
+            }
+          }
         });
 
-        importSessions(parsedSessions);
+        importSessions(allImportedSessions);
         toast({
           title: 'Импорт сессий успешен',
-          description: `Успешно загружено ${parsedSessions.length} сессий.`,
+          description: `Успешно загружено ${allImportedSessions.length} сессий.`,
         });
 
       } catch (error) {
         console.error('Failed to import sessions:', error);
         toast({
           title: 'Ошибка импорта сессий',
-          description: 'Не удалось прочитать файл. Убедитесь, что он имеет правильный формат.',
+          description: 'Не удалось прочитать файл или его содержимое. Убедитесь, что он имеет правильный формат и содержит данные.',
           variant: 'destructive',
         });
       } finally {
