@@ -118,7 +118,7 @@ const DataPage = () => {
         const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
           // Итерация reduce. Текущая строка
           console.log('Итерация reduce. Текущая строка:', row);
-          // Получаем сырые данные из колонки '__EMPTY__'
+          // Получаем сырые данные из колонки '__EMPTY'
           const rawData = row['__EMPTY']; 
           // Значение из колонки __EMPTY__
           console.log('Значение из колонки __EMPTY__:', rawData);
