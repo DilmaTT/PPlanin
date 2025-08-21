@@ -27,9 +27,16 @@ import {
   TableCaption,
 } from '@/components/ui/table';
 import * as Collapsible from '@radix-ui/react-collapsible';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, PlusCircle } from 'lucide-react';
 import { Session } from '@/types';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const SessionDetails = ({ 
   sessions, 
@@ -386,11 +393,27 @@ const ListView = () => {
                       !day.hasSessions && 'text-muted-foreground',
                       day.hasMultipleSessions && 'cursor-pointer data-[state=open]:bg-muted'
                     )}>
-                      <TableCell className="font-medium flex items-center">
-                        {day.hasMultipleSessions && (
-                          <ChevronDown className="h-4 w-4 mr-2 transition-transform duration-200 flex-shrink-0 data-[state=open]:rotate-180" />
-                        )}
-                        <span className={cn(!day.hasMultipleSessions && 'ml-6')}>{day.date}</span>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center">
+                          {day.hasMultipleSessions && (
+                            <ChevronDown className="h-4 w-4 mr-2 transition-transform duration-200 flex-shrink-0 data-[state=open]:rotate-180" />
+                          )}
+                          <span className={cn(!day.hasMultipleSessions && 'ml-6')}>{day.date}</span>
+                          {settings.allowManualEditing && (
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="ml-2 h-6 w-6">
+                                    <PlusCircle className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                  <DropdownMenuLabel>Здесь будет форма добавления сессии</DropdownMenuLabel>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       {listViewOptions.showSessionCount && <TableCell className="text-right tabular-nums">{day.sessionCount || '-'}</TableCell>}
                       {listViewOptions.showDuration && <TableCell className="text-right tabular-nums">{day.hasSessions ? day.totalDuration : '-'}</TableCell>}
