@@ -116,11 +116,17 @@ const DataPage = () => {
         console.log('Шаг 1: Данные из XLSX:', jsonData);
 
         const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
+          // Итерация reduce. Текущая строка
+          console.log('Итерация reduce. Текущая строка:', row);
           // Получаем сырые данные из колонки '__EMPTY__'
           const rawData = row['__EMPTY']; 
+          // Значение из колонки __EMPTY__
+          console.log('Значение из колонки __EMPTY__:', rawData);
           
           // Добавляем проверку: если rawData — это строка, которая начинается с символа '['
           if (typeof rawData === 'string' && rawData.startsWith('[')) {
+            // Условие пройдено! Пытаюсь парсить JSON.
+            console.log('Условие пройдено! Пытаюсь парсить JSON.');
             try {
               const daySessions: Session[] = JSON.parse(rawData);
               // Шаг 2: Распарсенные сессии из строки
