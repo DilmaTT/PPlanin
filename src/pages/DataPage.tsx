@@ -118,10 +118,10 @@ const DataPage = () => {
         const allImportedSessions: Session[] = [];
 
         json.forEach(row => {
-          // Check for the 'rawData' key or empty string key which contains the JSON string of sessions for that day
-          const rawDataString = row['Raw Data'] || row['']; 
+          // Check for the 'rawData' key or empty string key or __EMPTY which contains the JSON string of sessions for that day
+          const rawDataString = row['Raw Data'] || row[''] || row['__EMPTY']; 
           
-          if (typeof rawDataString === 'string' && rawDataString !== 'IS_OFF_DAY') {
+          if (typeof rawDataString === 'string' && rawDataString.startsWith('[') && rawDataString !== 'IS_OFF_DAY') {
             try {
               const daySessions: Session[] = JSON.parse(rawDataString);
               // Шаг 2: Распарсенные сессии из строки
