@@ -336,7 +336,9 @@ import { useState } from 'react';
 
         // 8. Apply styles to data rows
         worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-          if (rowNumber > worksheet.rowCount - (showTotals ? 3 : 0)) return;
+          // Skip styling for totals rows if they exist
+          const isTotalsRow = showTotals && (rowNumber === worksheet.rowCount || rowNumber === worksheet.rowCount - 1 || rowNumber === worksheet.rowCount - 2);
+          if (isTotalsRow) return;
 
           row.eachCell({ includeEmpty: true }, (cell) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -348,14 +350,18 @@ import { useState } from 'react';
             const rawDataCell = row.getCell('rawData');
             if (rawDataCell && rawDataCell.value === 'IS_OFF_DAY') {
               const visibleColumns = worksheet.columns.filter(c => !c.hidden);
-              for (let i = 2; i <= visibleColumns.length; i++) {
+              // Start from the second visible column (index 1) to merge
+              if (visibleColumns.length > 1) {
+                const startCell = visibleColumns[1].letter + rowNumber;
+                const endCell = visibleColumns[visibleColumns.length - 1].letter + rowNumber;
+                worksheet.mergeCells(startCell, endCell);
+              }
+              // Apply styling to all cells in the row that are part of the data
+              for (let i = 1; i < worksheet.columnCount; i++) { // Iterate through all columns
                 const cell = row.getCell(i);
-                if (cell) {
+                if (cell && !cell.isMerged) { // Apply to non-merged cells
                   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'ffe3ea' } };
                 }
-              }
-              if (visibleColumns.length > 1) {
-                worksheet.mergeCells(`${visibleColumns[1].letter}${rowNumber}:${visibleColumns[visibleColumns.length - 1].letter}${rowNumber}`);
               }
             }
           }
@@ -375,7 +381,8 @@ import { useState } from 'react';
           // Проверяем длину каждой ячейки данных в этой колонке
           column.eachCell({ includeEmpty: true }, (cell) => {
             // Пропускаем ячейку, если она скрыта или является частью объединенной ячейки, которая уже обработана
-            if (cell.isMerged || cell.hidden) return;
+            // Убрали cell.hidden, так как оно не применимо к ячейкам
+            if (cell.isMerged) return;
 
             const cellValue = cell.value;
             let cellLength = 0;
@@ -419,7 +426,7 @@ import { useState } from 'react';
       };
 
       return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={isOpen} onOpenChange={() => onClose?.()}>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Настройки экспорта данных</DialogTitle>
@@ -556,7 +563,7 @@ import { useState } from 'react';
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
+              <Button type="button" variant="outline" onClick={() => onClose?.()}>Отмена</Button>
               <Button type="button" onClick={handleExport}>Сформировать отчет</Button>
             </DialogFooter>
           </DialogContent>
