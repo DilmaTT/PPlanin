@@ -121,6 +121,9 @@ import { useState } from 'react';
       };
 
       const handleExport = async () => {
+        // Шаг 1: Получено сессий
+        console.log('Шаг 1: Получено сессий:', sessions);
+
         // 1. Determine date range
         let startDate = new Date();
         let endDate = new Date();
@@ -146,6 +149,9 @@ import { useState } from 'react';
           acc[dayKey].push(session);
           return acc;
         }, {} as Record<string, Session[]>);
+
+        // Шаг 2: Отфильтрованные сессии (сгруппированные по дням)
+        console.log('Шаг 2: Отфильтрованные сессии (сгруппированные по дням):', groupedByDay);
 
         // 3. Prepare data for ExcelJS, including raw data for calculations
         const formattedData = dateRange.map(currentDate => {
@@ -253,6 +259,9 @@ import { useState } from 'react';
 
           return row;
         });
+
+        // Шаг 3: Данные для экспорта
+        console.log('Шаг 3: Данные для экспорта:', formattedData);
 
         // Define descriptionRowData and totalsRowData here if showTotals is true
         let descriptionRowData: Record<string, string> = {};
