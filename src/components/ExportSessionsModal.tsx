@@ -494,11 +494,11 @@ import { useState } from 'react';
                   </div>
                   <div className="flex items-center space-x-2 mb-2">
                     <RadioGroupItem value="month" id="r2" />
-                    <Label htmlFor="r2" className="cursor-pointer">За месяц</Label>
+                    <Label htmlFor="r2" cursor-pointer">За месяц</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="custom" id="r3" />
-                    <Label htmlFor="r3" className="cursor-pointer">Свой вариант</Label>
+                    <Label htmlFor="r3" cursor-pointer">Свой вариант</Label>
                   </div>
                 </RadioGroup>
                 {period === 'custom' && (
