@@ -267,10 +267,9 @@ import { useState } from 'react';
 
           // Add rawData column (hidden in Excel, used for logic)
           if (isOffDay(currentDate)) {
-            row['rawData'] = JSON.stringify([]); // Empty array for off-days
+            row['rawData'] = 'IS_OFF_DAY'; // Use a unique marker for off-days
             
             // Set the second column to "Выходной" and clear the rest.
-            // The date column is already populated from the switch statement above.
             let isSecondColumn = true;
             columns.forEach(col => {
               if (col.id !== 'date') {
@@ -306,8 +305,8 @@ import { useState } from 'react';
             }
           });
           // Add one space padding to each header
-          const paddedHeader = `  ${col.label}  `; // Изменено: 1 пробел с каждой стороны
-          return { header: paddedHeader, key: col.id, width: maxWidth + 2 }; // Изменено: +2 для 2 пробелов
+          const paddedHeader = `  ${col.label}  `;
+          return { header: paddedHeader, key: col.id, width: maxWidth + 2 };
         });
 
         // Add the hidden rawData column for internal use
@@ -331,18 +330,22 @@ import { useState } from 'react';
           } else {
             // Check for off-day rows using the hidden 'rawData' column
             const rawDataCell = row.getCell('rawData');
-            if (rawDataCell && rawDataCell.value === '[]') {
-              // Apply light red background to the entire row
-              row.eachCell({ includeEmpty: true }, (cell) => {
-                cell.fill = {
-                  type: 'pattern',
-                  pattern: 'solid',
-                  fgColor: { argb: 'ffe3ea' } // Light red background
-                };
-              });
+            if (rawDataCell && rawDataCell.value === 'IS_OFF_DAY') {
+              const visibleColumns = worksheet.columns.filter(c => !c.hidden);
+
+              // Apply light red background from the second column onwards
+              for (let i = 2; i <= visibleColumns.length; i++) {
+                const cell = row.getCell(i);
+                if (cell) {
+                  cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'ffe3ea' } // Light red background
+                  };
+                }
+              }
 
               // Merge cells from the second column to the last visible column
-              const visibleColumns = worksheet.columns.filter(c => !c.hidden);
               if (visibleColumns.length > 1) {
                 const firstMergeCol = visibleColumns[1].letter; // Second visible column
                 const lastMergeCol = visibleColumns[visibleColumns.length - 1].letter; // Last visible column
