@@ -12,7 +12,7 @@ const DataPage = () => {
   const { toast } = useToast();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const sessionsFileInputRef = useRef<HTMLInputElement>(null);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModal] = useState(false);
 
   const handleSettingsExport = () => {
     try {
@@ -116,27 +116,21 @@ const DataPage = () => {
         console.log('Шаг 1: Данные из XLSX:', jsonData);
 
         const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
-          // Итерация reduce. Текущая строка
           console.log('Итерация reduce. Текущая строка:', row);
-          // Получаем сырые данные из колонки '__EMPTY'
-          const rawData = row['__EMPTY']; 
-          // Значение из колонки __EMPTY__
-          console.log('Значение из колонки __EMPTY__:', rawData);
-          
-          // Добавляем проверку: если rawData — это строка, которая начинается с символа '['
+
+          const rawData = row['__EMPTY']; // ИСПРАВЛЕННЫЙ КЛЮЧ
+          console.log('Значение из колонки __EMPTY:', rawData);
+
           if (typeof rawData === 'string' && rawData.startsWith('[')) {
-            // Условие пройдено! Пытаюсь парсить JSON.
             console.log('Условие пройдено! Пытаюсь парсить JSON.');
             try {
-              const daySessions: Session[] = JSON.parse(rawData);
-              // Шаг 2: Распарсенные сессии из строки
-              console.log('Шаг 2: Распарсенные сессии из строки:', daySessions);
-              acc.push(...daySessions);
-            } catch (parseError) {
-              console.warn('Failed to parse rawData for a row, skipping:', row, parseError);
-              // Можно добавить toast для предупреждения о пропущенных строках
+              const sessionsFromRow = JSON.parse(rawData);
+              acc.push(...sessionsFromRow);
+            } catch (error) {
+              console.error('Ошибка парсинга JSON:', error);
             }
           }
+
           return acc;
         }, []);
 
@@ -210,7 +204,7 @@ const DataPage = () => {
             </CardHeader>
             <CardContent>
               <div className="flex gap-4">
-                <Button onClick={() => setIsExportModalOpen(true)}>Экспорт данных (XLSX)</Button>
+                <Button onClick={() => setIsExportModal(true)}>Экспорт данных (XLSX)</Button>
                 <Button variant="outline" onClick={handleSessionImportClick}>Импорт сессий (XLSX)</Button>
                 <input
                   type="file"
@@ -239,8 +233,8 @@ const DataPage = () => {
         </div>
       </div>
       <ExportSessionsModal 
-        isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
+        isOpen={isExportModal}
+        onClose={() => setIsExportModal(false)}
         sessions={sessions}
       />
     </>
