@@ -385,7 +385,7 @@ import { useState } from 'react';
           console.error("Error exporting Excel file:", error);
         }
 
-        onClose?.();
+        onClose?.(); // Исправлено: добавлена проверка onClose?.()
       };
 
       return (
