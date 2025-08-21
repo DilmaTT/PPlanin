@@ -12,7 +12,7 @@ const DataPage = () => {
   const { toast } = useToast();
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
   const sessionsFileInputRef = useRef<HTMLInputElement>(null);
-  const [isExportModalOpen, setIsExportModal] = useState(false);
+  const [isExportModal, setIsExportModal] = useState(false); // Изменено: isExportModalOpen удалено, isExportModal теперь переменная состояния
 
   const handleSettingsExport = () => {
     try {
@@ -233,7 +233,7 @@ const DataPage = () => {
         </div>
       </div>
       <ExportSessionsModal 
-        isOpen={isExportModal}
+        isOpen={isExportModal} // Теперь isExportModal корректно ссылается на переменную состояния
         onClose={() => setIsExportModal(false)}
         sessions={sessions}
       />
