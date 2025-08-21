@@ -182,7 +182,6 @@ import { useState } from 'react';
 
           // Populate formatted data for display
           columns.forEach(col => {
-            // ... (switch case for each column)
             switch (col.id) {
               case 'date': row[col.id] = formattedDate; break;
               case 'sessionCount': row[col.id] = daySessions.length > 0 ? daySessions.length : ''; break;
@@ -258,20 +257,13 @@ import { useState } from 'react';
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Sessions");
 
-        // 5. Define columns for ExcelJS, calculating width dynamically
-        const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
-          let maxWidth = col.label.length; // Start with header length
-          formattedData.forEach(row => {
-            const cellValue = row[col.id];
-            if (cellValue) {
-              const cellLength = String(cellValue).length;
-              if (cellLength > maxWidth) maxWidth = cellLength;
-            }
-          });
-          return { header: `  ${col.label}  `, key: col.id, width: maxWidth + 2 };
-        });
+        // 5. Define columns for ExcelJS, without setting width
+        const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => ({
+          header: `  ${col.label}  `,
+          key: col.id,
+        }));
 
-        excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
+        excelColumns.push({ header: 'Raw Data', key: 'rawData' });
         worksheet.columns = excelColumns;
         worksheet.getColumn('rawData').hidden = true;
 
@@ -293,7 +285,6 @@ import { useState } from 'react';
               acc.selectTime += row._raw.totalSelectTimeInSeconds;
               acc.hands += row._raw.totalHandsPlayed;
               acc.planHands += row._raw.goalHands;
-              // Only sum hands/hr for days with actual play time to avoid skewing the average
               if (row._raw.totalPlayTimeInSeconds > 0) {
                 acc.handsPerHourSum += row._raw.handsPerHour;
                 acc.daysWithPlayTime++;
@@ -345,7 +336,7 @@ import { useState } from 'react';
 
         // 8. Apply styles to data rows
         worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-          if (rowNumber > worksheet.rowCount - (showTotals ? 3 : 0)) return; // Skip total rows
+          if (rowNumber > worksheet.rowCount - (showTotals ? 3 : 0)) return;
 
           row.eachCell({ includeEmpty: true }, (cell) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -370,7 +361,22 @@ import { useState } from 'react';
           }
         });
 
-        // 9. Generate and download the file
+        // 9. Calculate column widths dynamically
+        worksheet.columns.forEach(column => {
+          if (!column.key || column.hidden) return;
+          let maxLength = 0;
+          column.eachCell({ includeEmpty: true }, (cell) => {
+            const cellLength = cell.value ? String(cell.value).length : 0;
+            if (cellLength > maxLength) {
+              maxLength = cellLength;
+            }
+          });
+          const headerLength = column.header ? column.header.length : 0;
+          maxLength = Math.max(maxLength, headerLength);
+          column.width = maxLength + 2;
+        });
+
+        // 10. Generate and download the file
         try {
           const buffer = await workbook.xlsx.writeBuffer();
           const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
