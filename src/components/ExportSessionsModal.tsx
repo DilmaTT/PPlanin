@@ -36,15 +36,15 @@ import { useState } from 'react';
     // Define visible columns for the UI and general export structure
     const columns = [
       { id: 'date', label: 'Дата' },
-      { id: 'sessionCount', label: 'Кол-во сессий' },
       { id: 'sessionDateTime', label: 'Дата сессий' },
+      { id: 'sessionCount', label: 'Кол-во сессий' },
       { id: 'totalTime', label: 'Общее время' },
+      { id: 'planHours', label: 'План (часы)' },
+      { id: 'planRemaining', label: 'Осталось по плану' },
       { id: 'playTime', label: 'Время игры' },
       { id: 'selectTime', label: 'Время селекта' },
-      { id: 'planHours', label: 'План (часы)' },
-      { id: 'planHands', label: 'План (руки)' },
-      { id: 'planRemaining', label: 'Осталось по плану' },
       { id: 'hands', label: 'Руки' },
+      { id: 'planHands', label: 'План (руки)' },
       { id: 'handsPerHour', label: 'Рук/час' },
       { id: 'notes', label: 'Заметки' },
     ];
