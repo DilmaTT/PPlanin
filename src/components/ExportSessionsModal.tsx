@@ -75,7 +75,7 @@ import { useState } from 'react';
 
     interface ExportSessionsModalProps {
       isOpen: boolean;
-      onClose?: () => void;
+      onClose: () => void;
       sessions: Session[];
     }
 
@@ -182,6 +182,7 @@ import { useState } from 'react';
 
           // Populate formatted data for display
           columns.forEach(col => {
+            // ... (switch case for each column)
             switch (col.id) {
               case 'date': row[col.id] = formattedDate; break;
               case 'sessionCount': row[col.id] = daySessions.length > 0 ? daySessions.length : ''; break;
@@ -257,13 +258,21 @@ import { useState } from 'react';
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Sessions");
 
-        // 5. Define columns for ExcelJS, without setting width
-        const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => ({
-          header: `  ${col.label}  `,
-          key: col.id,
-        }));
+        // 5. Define columns for ExcelJS, calculating width dynamically
+        const dataForWidthCalculation = formattedData.filter(row => !row._raw.isOffDay);
+        const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
+          let maxWidth = col.label.length;
+          dataForWidthCalculation.forEach(row => {
+            const cellValue = row[col.id];
+            if (cellValue) {
+              const cellLength = String(cellValue).length;
+              if (cellLength > maxWidth) maxWidth = cellLength;
+            }
+          });
+          return { header: `  ${col.label}  `, key: col.id, width: maxWidth + 2 };
+        });
 
-        excelColumns.push({ header: 'Raw Data', key: 'rawData' });
+        excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
         worksheet.columns = excelColumns;
         worksheet.getColumn('rawData').hidden = true;
 
@@ -285,6 +294,7 @@ import { useState } from 'react';
               acc.selectTime += row._raw.totalSelectTimeInSeconds;
               acc.hands += row._raw.totalHandsPlayed;
               acc.planHands += row._raw.goalHands;
+              // Only sum hands/hr for days with actual play time to avoid skewing the average
               if (row._raw.totalPlayTimeInSeconds > 0) {
                 acc.handsPerHourSum += row._raw.handsPerHour;
                 acc.daysWithPlayTime++;
@@ -336,9 +346,7 @@ import { useState } from 'react';
 
         // 8. Apply styles to data rows
         worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-          // Skip styling for totals rows if they exist
-          const isTotalsRow = showTotals && (rowNumber === worksheet.rowCount || rowNumber === worksheet.rowCount - 1 || rowNumber === worksheet.rowCount - 2);
-          if (isTotalsRow) return;
+          if (rowNumber > worksheet.rowCount - (showTotals ? 3 : 0)) return; // Skip total rows
 
           row.eachCell({ includeEmpty: true }, (cell) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -350,70 +358,20 @@ import { useState } from 'react';
             const rawDataCell = row.getCell('rawData');
             if (rawDataCell && rawDataCell.value === 'IS_OFF_DAY') {
               const visibleColumns = worksheet.columns.filter(c => !c.hidden);
-              // Start from the second visible column (index 1) to merge
-              if (visibleColumns.length > 1) {
-                const startCell = visibleColumns[1].letter + rowNumber;
-                const endCell = visibleColumns[visibleColumns.length - 1].letter + rowNumber;
-                worksheet.mergeCells(startCell, endCell);
-              }
-              // Apply styling to all cells in the row that are part of the data
-              for (let i = 1; i < worksheet.columnCount; i++) { // Iterate through all columns
+              for (let i = 2; i <= visibleColumns.length; i++) {
                 const cell = row.getCell(i);
-                if (cell && !cell.isMerged) { // Apply to non-merged cells
+                if (cell) {
                   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'ffe3ea' } };
                 }
               }
-            }
-          }
-        });
-
-        // 9. Calculate column widths dynamically
-        worksheet.columns.forEach(column => {
-          if (!column.key || column.hidden) return; // Пропускаем скрытые колонки или колонки без ключа
-
-          let maxLength = 0;
-
-          // Проверяем длину заголовка
-          if (column.header) {
-            maxLength = String(column.header).length;
-          }
-
-          // Проверяем длину каждой ячейки данных в этой колонке
-          column.eachCell({ includeEmpty: true }, (cell) => {
-            // Пропускаем ячейку, если она скрыта или является частью объединенной ячейки, которая уже обработана
-            // Убрали cell.hidden, так как оно не применимо к ячейкам
-            if (cell.isMerged) return;
-
-            const cellValue = cell.value;
-            let cellLength = 0;
-
-            if (cellValue !== null && cellValue !== undefined) {
-              // Преобразуем значение ячейки в строку для расчета длины
-              // Особо обрабатываем числа и даты, чтобы получить их строковое представление
-              if (typeof cellValue === 'number') {
-                cellLength = String(cellValue).length;
-              } else if (cellValue instanceof Date) {
-                cellLength = format(cellValue, 'dd.MM.yyyy HH:mm:ss').length; // Пример формата, можно настроить
-              } else if (typeof cellValue === 'object' && cellValue !== null && 'richText' in cellValue) {
-                // Обработка RichText (если используется)
-                cellValue.richText.forEach((rt: any) => {
-                  cellLength += rt.text.length;
-                });
-              } else {
-                cellLength = String(cellValue).length;
+              if (visibleColumns.length > 1) {
+                worksheet.mergeCells(`${visibleColumns[1].letter}${rowNumber}:${visibleColumns[visibleColumns.length - 1].letter}${rowNumber}`);
               }
             }
-
-            if (cellLength > maxLength) {
-              maxLength = cellLength;
-            }
-          });
-
-          // Устанавливаем ширину колонки с небольшим запасом
-          column.width = maxLength + 2;
+          }
         });
 
-        // 10. Generate and download the file
+        // 9. Generate and download the file
         try {
           const buffer = await workbook.xlsx.writeBuffer();
           const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -422,11 +380,11 @@ import { useState } from 'react';
           console.error("Error exporting Excel file:", error);
         }
 
-        onClose?.();
+        onClose();
       };
 
       return (
-        <Dialog open={isOpen} onOpenChange={() => onClose?.()}>
+        <Dialog open={isOpen} onOpenChange={onClose}>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Настройки экспорта данных</DialogTitle>
@@ -508,15 +466,15 @@ import { useState } from 'react';
                               <RadioGroup value={planRemainingFormat} onValueChange={setPlanRemainingFormat} defaultValue="hm">
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="h" id="fmt-h" />
-                                  <Label htmlFor="fmt-h" className="cursor-pointer">Часы (например, 6ч)</Label>
+                                  <Label htmlFor="fmt-h">Часы (например, 6ч)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="hm" id="fmt-hm" />
-                                  <Label htmlFor="fmt-hm" className="cursor-pointer">Часы и минуты (например, 6ч 15мин)</Label>
+                                  <Label htmlFor="fmt-hm">Часы и минуты (например, 6ч 15мин)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="hms" id="fmt-hms" />
-                                  <Label htmlFor="fmt-hms" className="cursor-pointer">Полный формат (05:00:00)</Label>
+                                  <Label htmlFor="fmt-hms">Полный формат (05:00:00)</Label>
                                 </div>
                               </RadioGroup>
                             </div>
@@ -563,7 +521,7 @@ import { useState } from 'react';
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onClose?.()}>Отмена</Button>
+              <Button type="button" variant="outline" onClick={onClose}>Отмена</Button>
               <Button type="button" onClick={handleExport}>Сформировать отчет</Button>
             </DialogFooter>
           </DialogContent>
