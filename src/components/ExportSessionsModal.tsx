@@ -258,17 +258,18 @@ import { useState } from 'react';
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet("Sessions");
 
-        // 5. Define columns for ExcelJS
+        // 5. Define columns for ExcelJS, calculating width dynamically
+        const dataForWidthCalculation = formattedData.filter(row => !row._raw.isOffDay);
         const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
           let maxWidth = col.label.length;
-          formattedData.forEach(row => {
+          dataForWidthCalculation.forEach(row => {
             const cellValue = row[col.id];
             if (cellValue) {
               const cellLength = String(cellValue).length;
               if (cellLength > maxWidth) maxWidth = cellLength;
             }
           });
-          return { header: `  ${col.label}  `, key: col.id, width: maxWidth + 4 };
+          return { header: `  ${col.label}  `, key: col.id, width: maxWidth + 2 };
         });
 
         excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
