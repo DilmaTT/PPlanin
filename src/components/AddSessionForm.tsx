@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { startOfDay, addSeconds } from 'date-fns';
-import { Session, SessionPeriod } from '@/types';
+import { Session, Period } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface AddSessionFormProps {
@@ -207,7 +207,7 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
       sessionEndTime = addSeconds(sessionStartTime, totalDurationSeconds);
     }
 
-    const periods: SessionPeriod[] = [];
+    const periods: Period[] = [];
     if (isSplitEnabled) {
       const playEndTime = addSeconds(sessionStartTime, playDurationSeconds);
       if (playDurationSeconds > 0) {
