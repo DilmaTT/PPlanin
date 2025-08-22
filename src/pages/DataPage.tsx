@@ -6,6 +6,8 @@ import type { Settings, Session } from '@/types';
 import { read, utils } from 'xlsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ExportSessionsModal } from '@/components/ExportSessionsModal';
+import { open as tauriOpenDialog, save as tauriSaveDialog } from '@tauri-apps/api/dialog';
+import { readTextFile, writeTextFile, readBinaryFile } from '@tauri-apps/api/fs';
 
 const DataPage = () => {
   const { sessions, settings, updateSettings, importSessions, resetAllData } = useStorage();
@@ -14,22 +16,37 @@ const DataPage = () => {
   const sessionsFileInputRef = useRef<HTMLInputElement>(null);
   const [isExportModal, setIsExportModal] = useState(false);
 
-  const handleSettingsExport = () => {
+  const handleSettingsExport = async () => {
     try {
       const settingsJson = JSON.stringify(settings, null, 2);
-      const blob = new Blob([settingsJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'poker-tracker-settings.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast({
-        title: 'Экспорт успешен',
-        description: 'Ваши настройки были сохранены в файл.',
-      });
+      
+      if (window.__TAURI__) {
+        const filePath = await tauriSaveDialog({
+          defaultPath: 'poker-tracker-settings.json',
+          filters: [{ name: 'JSON', extensions: ['json'] }]
+        });
+        if (filePath) {
+          await writeTextFile(filePath, settingsJson);
+          toast({
+            title: 'Экспорт успешен',
+            description: 'Ваши настройки были сохранены в файл.',
+          });
+        }
+      } else {
+        const blob = new Blob([settingsJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'poker-tracker-settings.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast({
+          title: 'Экспорт успешен',
+          description: 'Ваши настройки были сохранены в файл.',
+        });
+      }
     } catch (error) {
       console.error('Failed to export settings:', error);
       toast({
@@ -40,8 +57,46 @@ const DataPage = () => {
     }
   };
 
-  const handleSettingsImportClick = () => {
-    settingsFileInputRef.current?.click();
+  const processImportedSettings = (text: string) => {
+    try {
+      const importedSettings = JSON.parse(text) as Settings;
+      updateSettings(importedSettings);
+      toast({
+        title: 'Импорт успешен',
+        description: 'Ваши настройки были успешно загружены.',
+      });
+    } catch (error) {
+      console.error('Failed to import settings:', error);
+      toast({
+        title: 'Ошибка импорта',
+        description: 'Не удалось прочитать или применить настройки из файла.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSettingsImportClick = async () => {
+    if (window.__TAURI__) {
+      try {
+        const selectedPath = await tauriOpenDialog({
+          multiple: false,
+          filters: [{ name: 'JSON', extensions: ['json'] }]
+        });
+        if (typeof selectedPath === 'string') {
+          const fileContents = await readTextFile(selectedPath);
+          processImportedSettings(fileContents);
+        }
+      } catch (error) {
+        console.error('Tauri settings import failed:', error);
+        toast({
+          title: 'Ошибка импорта',
+          description: 'Не удалось открыть или прочитать файл.',
+          variant: 'destructive',
+        });
+      }
+    } else {
+      settingsFileInputRef.current?.click();
+    }
   };
 
   const handleSettingsFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -59,30 +114,18 @@ const DataPage = () => {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const text = e.target?.result;
-        if (typeof text !== 'string') {
-          throw new Error('Failed to read file content.');
-        }
-        const importedSettings = JSON.parse(text) as Settings;
-        
-        updateSettings(importedSettings);
-        
+      const text = e.target?.result;
+      if (typeof text === 'string') {
+        processImportedSettings(text);
+      } else {
         toast({
-          title: 'Импорт успешен',
-          description: 'Ваши настройки были успешно загружены.',
-        });
-      } catch (error) {
-        console.error('Failed to import settings:', error);
-        toast({
-          title: 'Ошибка импорта',
-          description: 'Не удалось прочитать или применить настройки из файла.',
+          title: 'Ошибка чтения файла',
+          description: 'Не удалось прочитать содержимое файла.',
           variant: 'destructive',
         });
-      } finally {
-        if (settingsFileInputRef.current) {
-          settingsFileInputRef.current.value = '';
-        }
+      }
+      if (settingsFileInputRef.current) {
+        settingsFileInputRef.current.value = '';
       }
     };
     reader.onerror = () => {
@@ -95,8 +138,67 @@ const DataPage = () => {
     reader.readAsText(file);
   };
 
-  const handleSessionImportClick = () => {
-    sessionsFileInputRef.current?.click();
+  const processSessionFile = (data: any, type: 'binary' | 'array') => {
+    try {
+      const workbook = read(data, { type });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = utils.sheet_to_json(worksheet) as any[];
+
+      const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
+        const rawData = row['Raw Data'] || row['RawData'];
+        if (typeof rawData === 'string' && rawData.startsWith('[')) {
+          try {
+            const sessionsFromRow = JSON.parse(rawData);
+            if (Array.isArray(sessionsFromRow)) {
+              acc.push(...sessionsFromRow);
+            } else if (sessionsFromRow && typeof sessionsFromRow === 'object') {
+              acc.push(sessionsFromRow);
+            }
+          } catch (error) {
+            console.error('Ошибка парсинга JSON в строке:', error);
+          }
+        }
+        return acc;
+      }, []);
+
+      importSessions(allSessionsToImport);
+      toast({
+        title: 'Импорт сессий успешен',
+        description: `Успешно загружено ${allSessionsToImport.length} сессий.`,
+      });
+    } catch (error) {
+      console.error('Failed to import sessions:', error);
+      toast({
+        title: 'Ошибка импорта сессий',
+        description: 'Не удалось прочитать файл или его содержимое. Убедитесь, что он имеет правильный формат и содержит данные.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSessionImportClick = async () => {
+    if (window.__TAURI__) {
+      try {
+        const selectedPath = await tauriOpenDialog({
+          multiple: false,
+          filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }]
+        });
+        if (typeof selectedPath === 'string') {
+          const fileContents = await readBinaryFile(selectedPath);
+          processSessionFile(fileContents, 'array');
+        }
+      } catch (error) {
+        console.error('Tauri session import failed:', error);
+        toast({
+          title: 'Ошибка импорта',
+          description: 'Не удалось открыть или прочитать файл.',
+          variant: 'destructive',
+        });
+      }
+    } else {
+      sessionsFileInputRef.current?.click();
+    }
   };
 
   const handleSessionFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -105,63 +207,10 @@ const DataPage = () => {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = read(data, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = utils.sheet_to_json(worksheet) as any[];
-
-        // Шаг 1: Данные из XLSX
-        console.log('Шаг 1: Данные из XLSX:', jsonData);
-
-        const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
-          console.log('Итерация reduce. Текущая строка:', row);
-
-          // ИСПРАВЛЕНО: Используем ключ 'Raw Data' или 'RawData'
-          // sheet_to_json может преобразовать "Raw Data" в "Raw Data" или "RawData"
-          // Проверим оба варианта или используем более надежный способ
-          const rawData = row['Raw Data'] || row['RawData']; 
-          console.log('Значение из колонки "Raw Data":', rawData);
-
-          if (typeof rawData === 'string' && rawData.startsWith('[')) {
-            console.log('Условие пройдено! Пытаюсь парсить JSON.');
-            try {
-              const sessionsFromRow = JSON.parse(rawData);
-              // Убедимся, что sessionsFromRow - это массив, даже если он содержит одну сессию
-              if (Array.isArray(sessionsFromRow)) {
-                acc.push(...sessionsFromRow);
-              } else if (sessionsFromRow && typeof sessionsFromRow === 'object') {
-                // Если это один объект сессии, обернем его в массив
-                acc.push(sessionsFromRow);
-              }
-            } catch (error) {
-              console.error('Ошибка парсинга JSON:', error);
-            }
-          }
-
-          return acc;
-        }, []);
-
-        // Шаг 3: Финальный массив для сохранения
-        console.log('Шаг 3: Финальный массив для сохранения:', allSessionsToImport);
-        importSessions(allSessionsToImport);
-        toast({
-          title: 'Импорт сессий успешен',
-          description: `Успешно загружено ${allSessionsToImport.length} сессий.`,
-        });
-
-      } catch (error) {
-        console.error('Failed to import sessions:', error);
-        toast({
-          title: 'Ошибка импорта сессий',
-          description: 'Не удалось прочитать файл или его содержимое. Убедитесь, что он имеет правильный формат и содержит данные.',
-          variant: 'destructive',
-        });
-      } finally {
-        if (sessionsFileInputRef.current) {
-          sessionsFileInputRef.current.value = '';
-        }
+      const data = e.target?.result;
+      processSessionFile(data, 'binary');
+      if (sessionsFileInputRef.current) {
+        sessionsFileInputRef.current.value = '';
       }
     };
     reader.readAsBinaryString(file);
@@ -206,7 +255,7 @@ const DataPage = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Экспорт данных</CardTitle>
+              <CardTitle>Экспорт и Импорт Сессий</CardTitle>
               <CardDescription>
                 Сохраните все ваши игровые сессии в XLSX файл для анализа или загрузите их из файла.
               </CardDescription>
