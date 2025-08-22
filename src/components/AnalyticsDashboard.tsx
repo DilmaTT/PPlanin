@@ -10,8 +10,8 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from '@/components/ui/chart';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ChartConfig } from '@/components/ui/chart';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const AnalyticsDashboard = () => {
   const { sessions } = useStorage();
@@ -127,7 +127,7 @@ const AnalyticsDashboard = () => {
                 tickLine={false}
                 axisLine={false}
                 tickMargin={10}
-                tickFormatter={(value) => `${value}ч`}
+                tickFormatter={(value: number) => `${value}ч`}
               />
               <ChartTooltip
                 cursor={false}
