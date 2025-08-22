@@ -39,7 +39,7 @@ export const saveExportFile = async (data: Uint8Array, defaultName: string): Pro
   } catch (error) {
      console.error("Tauri save dialog failed, falling back to browser download.", error);
      // Fallback for web environment
-     const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+     const blob = new Blob([data.buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
      const url = URL.createObjectURL(blob);
      const a = document.createElement('a');
      a.href = url;

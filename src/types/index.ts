@@ -1,4 +1,4 @@
-export type SessionPeriod = {
+export type Period = {
   startTime: string;
   endTime: string;
   type: 'play' | 'break' | 'select';
@@ -8,12 +8,12 @@ export type Session = {
   id: string;
   overallStartTime: string;
   overallEndTime: string;
-  overallDuration: number;
+  overallDuration: number; // in milliseconds
   overallProfit: number;
   overallHandsPlayed: number;
   notes: string;
   handsPlayed: number;
-  periods?: SessionPeriod[]; // Make periods optional
+  periods?: Period[]; // Make periods optional
 };
 
 export type Settings = {

@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useStorage } from '@/hooks/useStorage';
 import { Session, Period } from '@/types';
 import { getCurrentTime } from '@/lib/tauriApi';
+import { differenceInMilliseconds } from 'date-fns';
 
 type PeriodType = 'play' | 'select';
 
@@ -9,9 +10,11 @@ interface SessionContextType {
   activeSession: boolean;
   elapsedTime: number;
   currentPeriodType: PeriodType;
+  completedSession: Session | null;
   startSession: () => Promise<void>;
   stopSession: () => Promise<void>;
   togglePeriod: (newType: PeriodType) => Promise<void>;
+  clearCompletedSession: () => void;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -33,7 +36,8 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
   const [activeSession, setActiveSession] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentPeriodType, setCurrentPeriodType] = useState<PeriodType>('play');
-  
+  const [completedSession, setCompletedSession] = useState<Session | null>(null);
+
   const [sessionStartTime, setSessionStartTime] = useState<string | null>(null);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [currentPeriodStartTime, setCurrentPeriodStartTime] = useState<string | null>(null);
@@ -58,12 +62,12 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
     setCurrentPeriodType(initialType);
     setCurrentPeriodStartTime(startTime);
     setPeriods([]);
+    setCompletedSession(null);
   };
 
   const stopSession = async () => {
     if (!sessionStartTime || !currentPeriodStartTime) return;
 
-    console.log('Шаг 2: Вызов stopSession в контексте');
     const endTime = await getCurrentTime();
 
     const finalPeriods: Period[] = [
@@ -75,25 +79,25 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
       },
     ];
     
-    console.log('Шаг 3: Финальные периоды перед сохранением:', finalPeriods);
-
     const newSession: Omit<Session, 'id'> = {
       overallStartTime: sessionStartTime,
       overallEndTime: endTime,
+      overallDuration: differenceInMilliseconds(new Date(endTime), new Date(sessionStartTime)),
+      overallProfit: 0, // Default value, can be edited in PostSessionModal
+      overallHandsPlayed: 0, // Default value, can be edited in PostSessionModal
       notes: '',
-      handsPlayed: 0,
+      handsPlayed: 0, // This will be updated in PostSessionModal
       periods: settings.splitPeriods ? finalPeriods : [],
     };
 
-    console.log('Шаг 4: Новая сессия для сохранения:', newSession);
-    addSession(newSession);
+    const savedSession = addSession(newSession);
+    setCompletedSession(savedSession);
 
     setActiveSession(false);
     setSessionStartTime(null);
     setCurrentPeriodStartTime(null);
     setPeriods([]);
     setElapsedTime(0);
-    console.log('Шаг 5: Состояние сброшено');
   };
 
   const togglePeriod = async (newType: PeriodType) => {
@@ -112,13 +116,19 @@ export const SessionProvider = ({ children }: SessionProviderProps) => {
     setCurrentPeriodStartTime(toggleTime);
   };
 
+  const clearCompletedSession = () => {
+    setCompletedSession(null);
+  };
+
   const value = {
     activeSession,
     elapsedTime,
     currentPeriodType,
+    completedSession,
     startSession,
     stopSession,
     togglePeriod,
+    clearCompletedSession,
   };
 
   return (
