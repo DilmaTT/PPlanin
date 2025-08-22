@@ -77,11 +77,12 @@ export const ExportSessionsModal = ({ isOpen, onClose, sessions }: ExportSession
       const excelBuffer = write(workbook, { bookType: 'xlsx', type: 'array' });
       const data = new Uint8Array(excelBuffer);
 
-      await saveExportFile(data, fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`);
+      const finalFileName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
+      await saveExportFile(data, finalFileName);
 
       toast({
         title: 'Экспорт успешен!',
-        description: `Данные сессий сохранены в файл ${fileName}.`,
+        description: `Данные сессий сохранены в файл ${finalFileName}.`,
       });
       onClose();
     } catch (error) {
