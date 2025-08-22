@@ -98,13 +98,15 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
-type ChartTooltipContentProps = React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-  React.ComponentProps<'div'> & {
+type ChartTooltipContentProps = React.ComponentProps<'div'> & {
     hideLabel?: boolean;
     hideIndicator?: boolean;
     indicator?: 'line' | 'dot' | 'dashed';
     nameKey?: string;
     labelKey?: string;
+    // Add these to correctly receive props from RechartsPrimitive.Tooltip
+    payload?: RechartsPrimitive.TooltipProps['payload'];
+    label?: RechartsPrimitive.TooltipProps['label'];
   };
 
 const ChartTooltipContent = React.forwardRef<
@@ -179,7 +181,7 @@ const ChartTooltipContent = React.forwardRef<
       >
         {!nestLabel ? tooltipLabel : null}
         <div className="grid gap-1.5">
-          {payload.map((item, index) => {
+          {payload.map((item: RechartsPrimitive.Payload<any, any>, index: number) => {
             const key = `${nameKey || item.name || item.dataKey || 'value'}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
             const indicatorColor = color || item.payload?.fill || item.color;
@@ -252,11 +254,13 @@ ChartTooltipContent.displayName = 'ChartTooltip';
 
 const ChartLegend = RechartsPrimitive.Legend;
 
-type ChartLegendContentProps = React.ComponentProps<'div'> &
-  Pick<RechartsPrimitive.LegendProps, 'payload' | 'verticalAlign'> & {
-    hideIcon?: boolean;
-    nameKey?: string;
-  };
+type ChartLegendContentProps = React.ComponentProps<'div'> & {
+  hideIcon?: boolean;
+  nameKey?: string;
+  // Explicitly define payload and verticalAlign from RechartsPrimitive.LegendProps
+  payload?: RechartsPrimitive.LegendProps['payload'];
+  verticalAlign?: RechartsPrimitive.LegendProps['verticalAlign'];
+};
 
 const ChartLegendContent = React.forwardRef<
   HTMLDivElement,
@@ -281,7 +285,7 @@ const ChartLegendContent = React.forwardRef<
           className
         )}
       >
-        {payload.map((item: RechartsPrimitive.Payload<any, any>) => { // Explicitly type item
+        {payload.map((item: RechartsPrimitive.Payload<any, any>) => {
           const key = `${nameKey || item.dataKey || 'value'}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
