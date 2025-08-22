@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useStorage } from '@/hooks/useStorage';
 import { 
   format, 
@@ -31,12 +31,7 @@ import { ChevronDown, PlusCircle } from 'lucide-react';
 import { Session } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import AddSessionForm from './AddSessionForm';
 
 const SessionDetails = ({ 
   sessions, 
@@ -144,6 +139,7 @@ const SessionDetails = ({
 const ListView = () => {
   const { sessions, settings, updateSession, getPlanForDate, isOffDay } = useStorage();
   const { listViewOptions } = settings;
+  const [addingSessionToDayId, setAddingSessionToDayId] = useState<string | null>(null);
 
   const dateInterval = useMemo(() => {
     const now = new Date();
@@ -191,8 +187,8 @@ const ListView = () => {
       days.sort((a, b) => a.getTime() - b.getTime());
     }
 
-    return days.map(day => {
-      const sessionsForDay = sessions.filter(session => isSameDay(new Date(session.overallStartTime), day));
+    return days.map(dayDate => {
+      const sessionsForDay = sessions.filter(session => isSameDay(new Date(session.overallStartTime), dayDate));
 
       const dayData = sessionsForDay.reduce((acc, session) => {
         const overallStart = new Date(session.overallStartTime);
@@ -201,7 +197,7 @@ const ListView = () => {
         acc.totalDuration += Math.max(0, differenceInSeconds(overallEnd, overallStart));
         acc.handsPlayed += session.handsPlayed;
 
-        session.periods?.forEach(period => { // Use optional chaining as `periods` might not exist on type
+        session.periods?.forEach(period => {
           const periodStart = new Date(period.startTime);
           const periodEnd = new Date(period.endTime);
           const duration = Math.max(0, differenceInSeconds(periodEnd, periodStart));
@@ -220,36 +216,35 @@ const ListView = () => {
         handsPlayed: 0,
       });
 
-      const totalDurationInHours = dayData.totalDuration / 3600; // Convert total duration to hours
+      const totalDurationInHours = dayData.totalDuration / 3600;
       const playDurationInHours = dayData.playDuration / 3600;
       const handsPerHour = playDurationInHours > 0 ? Math.round(dayData.handsPlayed / playDurationInHours) : 0;
 
       const dateParts: string[] = [];
-      dateParts.push(format(day, 'd', { locale: ru }));
+      dateParts.push(format(dayDate, 'd', { locale: ru }));
       if (listViewOptions.showMonth) {
-        dateParts.push(format(day, 'MMMM', { locale: ru }));
+        dateParts.push(format(dayDate, 'MMMM', { locale: ru }));
       }
       if (listViewOptions.showDayOfWeek) {
-        dateParts.push(format(day, 'EEEE', { locale: ru }));
+        dateParts.push(format(dayDate, 'EEEE', { locale: ru }));
       }
       if (listViewOptions.showYear) {
-        dateParts.push(format(day, 'yyyy', { locale: ru }));
+        dateParts.push(format(dayDate, 'yyyy', { locale: ru }));
       }
       const formattedDate = dateParts.join(' ');
 
-      const planForDay = getPlanForDate(day);
+      const planForDay = getPlanForDate(dayDate);
       const dailyPlanHours = planForDay ? planForDay.hours : 0;
-      const dailyPlanHands = planForDay ? planForDay.hands : 0; // Get planned hands
+      const dailyPlanHands = planForDay ? planForDay.hands : 0;
       
-      // Calculate daily remaining hours: Plan (hours) - Total duration (hours)
       const calculatedDailyRemainingHours = dailyPlanHours - totalDurationInHours;
-      const dailyRemainingHours = Math.max(0, calculatedDailyRemainingHours); // Display 0 if negative or zero
+      const dailyRemainingHours = Math.max(0, calculatedDailyRemainingHours);
       
-      const isDayOff = isOffDay(day);
-
+      const isDayOff = isOffDay(dayDate);
 
       return {
-        id: format(day, 'yyyy-MM-dd'),
+        id: format(dayDate, 'yyyy-MM-dd'),
+        originalDate: dayDate,
         date: formattedDate,
         totalDuration: formatSeconds(dayData.totalDuration),
         rawTotalDuration: dayData.totalDuration,
@@ -264,8 +259,8 @@ const ListView = () => {
         hasMultipleSessions: sessionsForDay.length > 1,
         sessionsForDay,
         dailyPlanHours,
-        dailyPlanHands, // Add to returned object
-        dailyRemainingHours, // Updated calculation
+        dailyPlanHands,
+        dailyRemainingHours,
         isOffDay: isDayOff,
       };
     });
@@ -284,10 +279,9 @@ const ListView = () => {
         acc.handsPlayed += day.handsPlayed;
         acc.sessionCount += day.sessionCount;
       }
-      // Only sum planned hours and hands for days that are NOT off-days
       if (!day.isOffDay) {
         acc.totalPlannedHours += day.dailyPlanHours; 
-        acc.totalPlannedHands += day.dailyPlanHands; // Sum planned hands
+        acc.totalPlannedHands += day.dailyPlanHands;
       }
       return acc;
     }, {
@@ -297,18 +291,17 @@ const ListView = () => {
       handsPlayed: 0,
       sessionCount: 0,
       totalPlannedHours: 0,
-      totalPlannedHands: 0, // New accumulator for total planned hands
+      totalPlannedHands: 0,
     });
 
     const totalPlayDurationInHours = result.playDuration / 3600;
-    const totalOverallDurationInHours = result.totalDuration / 3600; // Convert total overall duration to hours
+    const totalOverallDurationInHours = result.totalDuration / 3600;
     const averageHandsPerHour = totalPlayDurationInHours > 0 
       ? Math.round(result.handsPlayed / totalPlayDurationInHours) 
       : 0;
     
-    // Calculate total remaining plan: Sum of all plans - Sum of total overall duration
     const calculatedTotalRemainingPlan = result.totalPlannedHours - totalOverallDurationInHours;
-    const totalRemainingPlan = Math.max(0, calculatedTotalRemainingPlan); // Display 0 if negative or zero
+    const totalRemainingPlan = Math.max(0, calculatedTotalRemainingPlan);
 
     return {
       totalDuration: formatSeconds(result.totalDuration),
@@ -318,8 +311,8 @@ const ListView = () => {
       sessionCount: result.sessionCount,
       averageHandsPerHour,
       totalPlannedHours: result.totalPlannedHours,
-      totalPlannedHands: result.totalPlannedHands, // Add to totals object
-      totalRemainingPlan, // Updated calculation
+      totalPlannedHands: result.totalPlannedHands,
+      totalRemainingPlan,
     };
   }, [processedDays, listViewOptions.showTotalsRow]);
 
@@ -329,25 +322,22 @@ const ListView = () => {
     listViewOptions.showTotalPlayTime,
     listViewOptions.showDailyPlan,
     listViewOptions.showDailyPlanRemaining,
-    listViewOptions.showDailyPlanHands, // Add to colSpan calculation
+    listViewOptions.showDailyPlanHands,
     settings.showHandsPlayed,
     listViewOptions.showHandsPerHour,
-  ].filter(Boolean).length + 2; // +2 for Date and Select Time
+  ].filter(Boolean).length + 2;
 
-  // Calculate the number of columns that would be rendered if it's not an off-day,
-  // to correctly span the "Выходной" cell.
   const dynamicColCount = [
     listViewOptions.showSessionCount,
     listViewOptions.showDuration,
     listViewOptions.showTotalPlayTime,
-    true, // Select Time is always visible
+    true,
     listViewOptions.showDailyPlan,
     listViewOptions.showDailyPlanRemaining,
-    listViewOptions.showDailyPlanHands, // Add to dynamicColCount calculation
+    listViewOptions.showDailyPlanHands,
     settings.showHandsPlayed,
     listViewOptions.showHandsPerHour,
   ].filter(Boolean).length;
-
 
   if (processedDays.length === 0) {
     return (
@@ -378,71 +368,81 @@ const ListView = () => {
         </TableHeader>
         <TableBody>
           {processedDays.map((day) => (
-            <Collapsible.Root key={day.id} asChild>
-              <>
-                {day.isOffDay ? (
-                  <TableRow className="off-day-row bg-red-100/50 dark:bg-red-900/20 text-muted-foreground">
-                    <TableCell className="font-medium">{day.date}</TableCell>
-                    <TableCell colSpan={dynamicColCount} className="text-center font-semibold text-lg py-4">
-                      Выходной
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <Collapsible.Trigger asChild disabled={!day.hasMultipleSessions}>
-                    <TableRow className={cn(
-                      !day.hasSessions && 'text-muted-foreground',
-                      day.hasMultipleSessions && 'cursor-pointer data-[state=open]:bg-muted'
-                    )}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center">
-                          {day.hasMultipleSessions && (
-                            <ChevronDown className="h-4 w-4 mr-2 transition-transform duration-200 flex-shrink-0 data-[state=open]:rotate-180" />
-                          )}
-                          <span className={cn(!day.hasMultipleSessions && 'ml-6')}>{day.date}</span>
-                          {settings.allowManualEditing && (
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="ml-2 h-6 w-6">
-                                    <PlusCircle className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  <DropdownMenuLabel>Здесь будет форма добавления сессии</DropdownMenuLabel>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </div>
+            <React.Fragment key={day.id}>
+              <Collapsible.Root asChild>
+                <>
+                  {day.isOffDay ? (
+                    <TableRow className="off-day-row bg-red-100/50 dark:bg-red-900/20 text-muted-foreground">
+                      <TableCell className="font-medium">{day.date}</TableCell>
+                      <TableCell colSpan={dynamicColCount} className="text-center font-semibold text-lg py-4">
+                        Выходной
                       </TableCell>
-                      {listViewOptions.showSessionCount && <TableCell className="text-right tabular-nums">{day.sessionCount || '-'}</TableCell>}
-                      {listViewOptions.showDuration && <TableCell className="text-right tabular-nums">{day.hasSessions ? day.totalDuration : '-'}</TableCell>}
-                      {listViewOptions.showTotalPlayTime && <TableCell className="text-right tabular-nums">{day.hasSessions ? day.playDuration : '-'}</TableCell>}
-                      <TableCell className="text-right tabular-nums">{day.hasSessions ? day.selectDuration : '-'}</TableCell>
-                      {listViewOptions.showDailyPlan && <TableCell className="text-right tabular-nums">{day.dailyPlanHours > 0 ? day.dailyPlanHours.toFixed(1) : '-'}</TableCell>}
-                      {listViewOptions.showDailyPlanHands && <TableCell className="text-right tabular-nums">{day.dailyPlanHands > 0 ? day.dailyPlanHands : '-'}</TableCell>}
-                      {listViewOptions.showDailyPlanRemaining && <TableCell className="text-right tabular-nums">{day.dailyPlanHours > 0 ? day.dailyRemainingHours.toFixed(1) : '-'}</TableCell>}
-                      {settings.showHandsPlayed && <TableCell className="text-right tabular-nums">{day.handsPlayed || '-'}</TableCell>}
-                      {listViewOptions.showHandsPerHour && <TableCell className="text-right tabular-nums">{day.handsPerHour || '-'}</TableCell>}
                     </TableRow>
-                  </Collapsible.Trigger>
-                )}
-                {!day.isOffDay && ( // Only show session details if it's not an off-day
-                  <Collapsible.Content asChild>
-                    <tr>
-                      <TableCell colSpan={colSpan} className="p-0">
-                        <SessionDetails 
-                          sessions={day.sessionsForDay} 
-                          showHandsPlayed={settings.showHandsPlayed}
-                          allowManualEditing={settings.allowManualEditing}
-                          updateSession={updateSession}
-                        />
-                      </TableCell>
-                    </tr>
-                  </Collapsible.Content>
-                )}
-              </>
-            </Collapsible.Root>
+                  ) : (
+                    <Collapsible.Trigger asChild disabled={!day.hasMultipleSessions}>
+                      <TableRow className={cn(
+                        !day.hasSessions && 'text-muted-foreground',
+                        day.hasMultipleSessions && 'cursor-pointer data-[state=open]:bg-muted'
+                      )}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center">
+                            {day.hasMultipleSessions && (
+                              <ChevronDown className="h-4 w-4 mr-2 transition-transform duration-200 flex-shrink-0 data-[state=open]:rotate-180" />
+                            )}
+                            <span className={cn(!day.hasMultipleSessions && 'ml-6')}>{day.date}</span>
+                            {settings.allowManualEditing && (
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="ml-2 h-6 w-6"
+                                  onClick={() => setAddingSessionToDayId(prevId => prevId === day.id ? null : day.id)}
+                                >
+                                  <PlusCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        {listViewOptions.showSessionCount && <TableCell className="text-right tabular-nums">{day.sessionCount || '-'}</TableCell>}
+                        {listViewOptions.showDuration && <TableCell className="text-right tabular-nums">{day.hasSessions ? day.totalDuration : '-'}</TableCell>}
+                        {listViewOptions.showTotalPlayTime && <TableCell className="text-right tabular-nums">{day.hasSessions ? day.playDuration : '-'}</TableCell>}
+                        <TableCell className="text-right tabular-nums">{day.hasSessions ? day.selectDuration : '-'}</TableCell>
+                        {listViewOptions.showDailyPlan && <TableCell className="text-right tabular-nums">{day.dailyPlanHours > 0 ? day.dailyPlanHours.toFixed(1) : '-'}</TableCell>}
+                        {listViewOptions.showDailyPlanHands && <TableCell className="text-right tabular-nums">{day.dailyPlanHands > 0 ? day.dailyPlanHands : '-'}</TableCell>}
+                        {listViewOptions.showDailyPlanRemaining && <TableCell className="text-right tabular-nums">{day.dailyPlanHours > 0 ? day.dailyRemainingHours.toFixed(1) : '-'}</TableCell>}
+                        {settings.showHandsPlayed && <TableCell className="text-right tabular-nums">{day.handsPlayed || '-'}</TableCell>}
+                        {listViewOptions.showHandsPerHour && <TableCell className="text-right tabular-nums">{day.handsPerHour || '-'}</TableCell>}
+                      </TableRow>
+                    </Collapsible.Trigger>
+                  )}
+                  {!day.isOffDay && (
+                    <Collapsible.Content asChild>
+                      <tr>
+                        <TableCell colSpan={colSpan} className="p-0">
+                          <SessionDetails 
+                            sessions={day.sessionsForDay} 
+                            showHandsPlayed={settings.showHandsPlayed}
+                            allowManualEditing={settings.allowManualEditing}
+                            updateSession={updateSession}
+                          />
+                        </TableCell>
+                      </tr>
+                    </Collapsible.Content>
+                  )}
+                </>
+              </Collapsible.Root>
+              {addingSessionToDayId === day.id && (
+                <TableRow>
+                  <TableCell colSpan={colSpan} className="p-0">
+                    <AddSessionForm
+                      day={day}
+                      onCancel={() => setAddingSessionToDayId(null)}
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </React.Fragment>
           ))}
         </TableBody>
         {listViewOptions.showTotalsRow && totals && (

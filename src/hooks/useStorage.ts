@@ -102,10 +102,9 @@ export const useStorage = () => {
   }), [storedSettings]);
 
   const addSession = useCallback((newSession: Omit<Session, 'id'>) => {
-    console.log('Шаг 4: Функция addSession в хранилище вызвана с полными данными');
     const sessionWithId: Session = {
       ...newSession,
-      id: newSession.overallStartTime, // Using start time as a unique ID
+      id: crypto.randomUUID(),
     };
     setSessions((prevSessions) => [...prevSessions, sessionWithId]);
     return sessionWithId;
