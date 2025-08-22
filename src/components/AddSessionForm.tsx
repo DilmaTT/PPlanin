@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { startOfDay, addSeconds } from 'date-fns';
-import { Session } from '@/types';
+import { Session, SessionPeriod } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface AddSessionFormProps {
@@ -98,7 +98,7 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
 
   // --- Memoized Calculations ---
   const exactDurationInSeconds = useMemo(() => {
-    if (!isExactTimeEnabled || startTimeSeconds === endTimeSeconds) return 0;
+    if (isSplitEnabled || !isExactTimeEnabled || startTimeSeconds === endTimeSeconds) return 0;
     try {
       const dayStart = startOfDay(day.originalDate);
       let start = addSeconds(dayStart, startTimeSeconds);
@@ -116,51 +116,45 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
     } catch {
       return 0;
     }
-  }, [isExactTimeEnabled, startTimeSeconds, endTimeSeconds, day.originalDate]);
+  }, [isSplitEnabled, isExactTimeEnabled, startTimeSeconds, endTimeSeconds, day.originalDate]);
 
   // --- Effects for state management ---
 
   const handleSplitToggle = (checked: boolean) => {
     setIsSplitEnabled(checked);
-    if (checked) setIsExactTimeEnabled(false);
   };
 
   const handleExactTimeToggle = (checked: boolean) => {
     setIsExactTimeEnabled(checked);
-    if (checked) setIsSplitEnabled(false);
+    if (checked && isSplitEnabled) {
+      setStartTimeSeconds(0);
+    }
   };
 
   useEffect(() => {
     if (isSplitEnabled) {
       setTotalDurationSeconds(playDurationSeconds + selectDurationSeconds);
-    }
-  }, [isSplitEnabled, playDurationSeconds, selectDurationSeconds]);
-
-  useEffect(() => {
-    if (isExactTimeEnabled) {
+    } else if (isExactTimeEnabled) {
       setTotalDurationSeconds(exactDurationInSeconds >= 0 ? exactDurationInSeconds : 0);
     }
-  }, [isExactTimeEnabled, exactDurationInSeconds]);
+  }, [isSplitEnabled, playDurationSeconds, selectDurationSeconds, isExactTimeEnabled, exactDurationInSeconds]);
+
+  useEffect(() => {
+    if (isSplitEnabled && isExactTimeEnabled) {
+      setEndTimeSeconds(startTimeSeconds + totalDurationSeconds);
+    }
+  }, [isSplitEnabled, isExactTimeEnabled, startTimeSeconds, totalDurationSeconds]);
 
 
   const handleQuickSave = () => {
     const totalSeconds = timeStringToSeconds(quickDuration);
 
-    if (totalSeconds > 48 * 3600) {
-      toast({
-        title: 'Ошибка валидации',
-        description: 'Продолжительность не может превышать 48 часов.',
-        variant: 'destructive',
-      });
+    if (totalSeconds <= 0) {
+      toast({ title: 'Ошибка валидации', description: 'Продолжительность должна быть больше нуля.', variant: 'destructive' });
       return;
     }
-
-    if (totalSeconds <= 0) {
-      toast({
-        title: 'Ошибка валидации',
-        description: 'Продолжительность должна быть больше нуля.',
-        variant: 'destructive',
-      });
+    if (totalSeconds > 48 * 3600) {
+      toast({ title: 'Ошибка валидации', description: 'Продолжительность не может превышать 48 часов.', variant: 'destructive' });
       return;
     }
 
@@ -185,45 +179,61 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
   };
 
   const handleDetailedSave = () => {
-    let finalTotalSeconds = totalDurationSeconds;
+    if (totalDurationSeconds <= 0) {
+      toast({ title: 'Ошибка', description: 'Итоговая продолжительность должна быть больше нуля.', variant: 'destructive' });
+      return;
+    }
+    if (totalDurationSeconds > 48 * 3600) {
+      toast({ title: 'Ошибка', description: 'Итоговая продолжительность не может превышать 48 часов.', variant: 'destructive' });
+      return;
+    }
+
+    const dayStart = startOfDay(day.originalDate);
     let sessionStartTime: Date;
     let sessionEndTime: Date;
 
     if (isExactTimeEnabled) {
-      if (exactDurationInSeconds <= 0) {
+      if (!isSplitEnabled && exactDurationInSeconds <= 0) {
         const description = exactDurationInSeconds === -1 
           ? 'Сессия не может длиться более 24 часов.'
           : 'Время окончания должно быть после времени начала.';
         toast({ title: 'Ошибка времени', description, variant: 'destructive' });
         return;
       }
-      sessionStartTime = addSeconds(startOfDay(day.originalDate), startTimeSeconds);
-      sessionEndTime = addSeconds(sessionStartTime, finalTotalSeconds);
+      sessionStartTime = addSeconds(dayStart, startTimeSeconds);
+      sessionEndTime = addSeconds(sessionStartTime, totalDurationSeconds);
     } else {
-      sessionStartTime = startOfDay(day.originalDate);
-      sessionEndTime = addSeconds(sessionStartTime, finalTotalSeconds);
+      sessionStartTime = dayStart;
+      sessionEndTime = addSeconds(sessionStartTime, totalDurationSeconds);
     }
 
-    if (finalTotalSeconds > 48 * 3600) {
-      toast({ title: 'Ошибка', description: 'Итоговая продолжительность не может превышать 48 часов.', variant: 'destructive' });
-      return;
+    const periods: SessionPeriod[] = [];
+    if (isSplitEnabled) {
+      const playEndTime = addSeconds(sessionStartTime, playDurationSeconds);
+      if (playDurationSeconds > 0) {
+        periods.push({ type: 'play', startTime: sessionStartTime.toISOString(), endTime: playEndTime.toISOString() });
+      }
+      if (selectDurationSeconds > 0) {
+        periods.push({ type: 'select', startTime: playEndTime.toISOString(), endTime: addSeconds(playEndTime, selectDurationSeconds).toISOString() });
+      }
+    } else {
+      periods.push({ type: 'play', startTime: sessionStartTime.toISOString(), endTime: sessionEndTime.toISOString() });
     }
-
-    if (finalTotalSeconds <= 0) {
-      toast({ title: 'Ошибка', description: 'Итоговая продолжительность должна быть больше нуля.', variant: 'destructive' });
-      return;
+    
+    if (periods.length === 0 && totalDurationSeconds > 0) {
+         periods.push({ type: 'play', startTime: sessionStartTime.toISOString(), endTime: sessionEndTime.toISOString() });
     }
 
     const handsPlayed = Math.max(0, parseInt(detailedHands, 10) || 0);
     const newSession: Omit<Session, 'id'> = {
       overallStartTime: sessionStartTime.toISOString(),
       overallEndTime: sessionEndTime.toISOString(),
-      overallDuration: finalTotalSeconds,
+      overallDuration: totalDurationSeconds,
       handsPlayed: handsPlayed,
       notes: detailedNotes,
       overallProfit: 0,
       overallHandsPlayed: handsPlayed,
-      periods: [{ type: 'play', startTime: sessionStartTime.toISOString(), endTime: sessionEndTime.toISOString() }],
+      periods: periods,
     };
 
     addSession(newSession);
@@ -316,7 +326,7 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Конец</Label>
-                        <TimeSelector value={endTimeSeconds} onChange={setEndTimeSeconds} />
+                        <TimeSelector value={endTimeSeconds} onChange={setEndTimeSeconds} disabled={isSplitEnabled && isExactTimeEnabled} />
                       </div>
                     </div>
                   )}
