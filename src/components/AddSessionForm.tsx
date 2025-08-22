@@ -5,12 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { startOfDay, addSeconds } from 'date-fns';
 import { Session } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { formatSeconds } from '@/lib/utils';
 
 interface AddSessionFormProps {
   day: {
@@ -30,12 +29,46 @@ const timeStringToSeconds = (timeStr: string): number => {
   return (hours * 3600) + (minutes * 60);
 };
 
-// Helper function to combine a date with a time string "HH:mm"
-const combineDateAndTime = (date: Date, timeStr: string): Date => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const newDate = new Date(date);
-    newDate.setHours(hours, minutes, 0, 0);
-    return newDate;
+// Reusable Time Selector Component
+interface TimeSelectorProps {
+  value: number; // in seconds
+  onChange: (seconds: number) => void;
+  disabled?: boolean;
+  maxHours?: number;
+}
+
+const TimeSelector: React.FC<TimeSelectorProps> = ({ value, onChange, disabled = false, maxHours = 24 }) => {
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+
+  const handleHourChange = (h: number) => {
+    onChange((h * 3600) + (minutes * 60));
+  };
+
+  const handleMinuteChange = (m: number) => {
+    onChange((hours * 3600) + (m * 60));
+  };
+
+  return (
+    <div className="flex gap-2">
+      <Select onValueChange={(v) => handleHourChange(Number(v))} value={String(hours)} disabled={disabled}>
+        <SelectTrigger className="w-[75px]">
+          <SelectValue placeholder="Часы" />
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          {[...Array(maxHours + 1).keys()].map(h => <SelectItem key={h} value={String(h)}>{h} ч</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select onValueChange={(v) => handleMinuteChange(Number(v))} value={String(minutes)} disabled={disabled}>
+        <SelectTrigger className="w-[85px]">
+          <SelectValue placeholder="Минуты" />
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          {[...Array(60).keys()].map(m => <SelectItem key={m} value={String(m)}>{m} мин</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 };
 
 
@@ -50,52 +83,77 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
   const [quickNotes, setQuickNotes] = useState('');
 
   // Detailed form state
-  const [detailedTimeMethod, setDetailedTimeMethod] = useState<'duration' | 'specific'>('duration');
-  const [detailedDuration, setDetailedDuration] = useState('');
-  const [startTime, setStartTime] = useState(''); // "HH:mm"
-  const [endTime, setEndTime] = useState(''); // "HH:mm"
-
-  const [isBreakdownEnabled, setIsBreakdownEnabled] = useState(false);
-  const [playTime, setPlayTime] = useState('');
-  const [selectTime, setSelectTime] = useState('');
+  const [totalDurationSeconds, setTotalDurationSeconds] = useState(0);
+  const [isSplitEnabled, setIsSplitEnabled] = useState(false);
+  const [isExactTimeEnabled, setIsExactTimeEnabled] = useState(false);
+  
+  const [playDurationSeconds, setPlayDurationSeconds] = useState(0);
+  const [selectDurationSeconds, setSelectDurationSeconds] = useState(0);
+  
+  const [startTimeSeconds, setStartTimeSeconds] = useState(0);
+  const [endTimeSeconds, setEndTimeSeconds] = useState(0);
 
   const [detailedHands, setDetailedHands] = useState('');
   const [detailedNotes, setDetailedNotes] = useState('');
 
-  // Memoized calculation for duration from specific times
-  const calculatedDurationInSeconds = useMemo(() => {
-    if (detailedTimeMethod !== 'specific' || !startTime || !endTime) {
-      return 0;
-    }
+  // --- Memoized Calculations ---
+  const exactDurationInSeconds = useMemo(() => {
+    if (!isExactTimeEnabled || startTimeSeconds === endTimeSeconds) return 0;
     try {
-      const start = combineDateAndTime(day.originalDate, startTime);
-      const end = combineDateAndTime(day.originalDate, endTime);
-      if (end <= start) return 0;
-      return (end.getTime() - start.getTime()) / 1000;
+      const dayStart = startOfDay(day.originalDate);
+      let start = addSeconds(dayStart, startTimeSeconds);
+      let end = addSeconds(dayStart, endTimeSeconds);
+      
+      if (end <= start) {
+        end = addSeconds(end, 24 * 3600);
+      }
+
+      const duration = (end.getTime() - start.getTime()) / 1000;
+      
+      if (duration > 24 * 3600) return -1;
+
+      return duration;
     } catch {
       return 0;
     }
-  }, [startTime, endTime, detailedTimeMethod, day.originalDate]);
+  }, [isExactTimeEnabled, startTimeSeconds, endTimeSeconds, day.originalDate]);
 
-  // Memoized calculation for breakdown sum
-  const breakdownSumInSeconds = useMemo(() => {
-    if (!isBreakdownEnabled) return 0;
-    return timeStringToSeconds(playTime) + timeStringToSeconds(selectTime);
-  }, [isBreakdownEnabled, playTime, selectTime]);
+  // --- Effects for state management ---
 
-  // Effect to update detailedDuration when breakdown is used in duration mode
+  const handleSplitToggle = (checked: boolean) => {
+    setIsSplitEnabled(checked);
+    if (checked) setIsExactTimeEnabled(false);
+  };
+
+  const handleExactTimeToggle = (checked: boolean) => {
+    setIsExactTimeEnabled(checked);
+    if (checked) setIsSplitEnabled(false);
+  };
+
   useEffect(() => {
-    if (detailedTimeMethod === 'duration' && isBreakdownEnabled) {
-      const totalSeconds = breakdownSumInSeconds;
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      setDetailedDuration(`${hours}:${minutes.toString().padStart(2, '0')}`);
+    if (isSplitEnabled) {
+      setTotalDurationSeconds(playDurationSeconds + selectDurationSeconds);
     }
-  }, [breakdownSumInSeconds, detailedTimeMethod, isBreakdownEnabled]);
+  }, [isSplitEnabled, playDurationSeconds, selectDurationSeconds]);
+
+  useEffect(() => {
+    if (isExactTimeEnabled) {
+      setTotalDurationSeconds(exactDurationInSeconds >= 0 ? exactDurationInSeconds : 0);
+    }
+  }, [isExactTimeEnabled, exactDurationInSeconds]);
 
 
   const handleQuickSave = () => {
     const totalSeconds = timeStringToSeconds(quickDuration);
+
+    if (totalSeconds > 48 * 3600) {
+      toast({
+        title: 'Ошибка валидации',
+        description: 'Продолжительность не может превышать 48 часов.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     if (totalSeconds <= 0) {
       toast({
@@ -127,42 +185,31 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
   };
 
   const handleDetailedSave = () => {
-    // Validation for breakdown sum
-    if (detailedTimeMethod === 'specific' && isBreakdownEnabled) {
-      if (breakdownSumInSeconds !== calculatedDurationInSeconds) {
-        toast({
-          title: 'Ошибка валидации',
-          description: `Сумма времени Игры и Селекта (${formatSeconds(breakdownSumInSeconds)}) не совпадает с общей продолжительностью (${formatSeconds(calculatedDurationInSeconds)}).`,
-          variant: 'destructive',
-        });
-        return;
-      }
-    }
-
-    let totalSeconds = 0;
+    let finalTotalSeconds = totalDurationSeconds;
     let sessionStartTime: Date;
     let sessionEndTime: Date;
 
-    // Determine Start/End Times and Total Duration
-    if (detailedTimeMethod === 'specific') {
-      if (calculatedDurationInSeconds <= 0) {
-        toast({ title: 'Ошибка', description: 'Время окончания должно быть после времени начала.', variant: 'destructive' });
+    if (isExactTimeEnabled) {
+      if (exactDurationInSeconds <= 0) {
+        const description = exactDurationInSeconds === -1 
+          ? 'Сессия не может длиться более 24 часов.'
+          : 'Время окончания должно быть после времени начала.';
+        toast({ title: 'Ошибка времени', description, variant: 'destructive' });
         return;
       }
-      sessionStartTime = combineDateAndTime(day.originalDate, startTime);
-      sessionEndTime = combineDateAndTime(day.originalDate, endTime);
-      totalSeconds = calculatedDurationInSeconds;
-    } else { // 'duration'
+      sessionStartTime = addSeconds(startOfDay(day.originalDate), startTimeSeconds);
+      sessionEndTime = addSeconds(sessionStartTime, finalTotalSeconds);
+    } else {
       sessionStartTime = startOfDay(day.originalDate);
-      if (isBreakdownEnabled) {
-        totalSeconds = breakdownSumInSeconds;
-      } else {
-        totalSeconds = timeStringToSeconds(detailedDuration);
-      }
-      sessionEndTime = addSeconds(sessionStartTime, totalSeconds);
+      sessionEndTime = addSeconds(sessionStartTime, finalTotalSeconds);
     }
 
-    if (totalSeconds <= 0) {
+    if (finalTotalSeconds > 48 * 3600) {
+      toast({ title: 'Ошибка', description: 'Итоговая продолжительность не может превышать 48 часов.', variant: 'destructive' });
+      return;
+    }
+
+    if (finalTotalSeconds <= 0) {
       toast({ title: 'Ошибка', description: 'Итоговая продолжительность должна быть больше нуля.', variant: 'destructive' });
       return;
     }
@@ -171,7 +218,7 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
     const newSession: Omit<Session, 'id'> = {
       overallStartTime: sessionStartTime.toISOString(),
       overallEndTime: sessionEndTime.toISOString(),
-      overallDuration: totalSeconds,
+      overallDuration: finalTotalSeconds,
       handsPlayed: handsPlayed,
       notes: detailedNotes,
       overallProfit: 0,
@@ -192,8 +239,6 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
     }
   };
 
-  const isBreakdownInvalid = detailedTimeMethod === 'specific' && isBreakdownEnabled && calculatedDurationInSeconds > 0 && breakdownSumInSeconds !== calculatedDurationInSeconds;
-
   return (
     <Card className="w-full max-w-none my-2 shadow-lg bg-card">
       <CardHeader>
@@ -209,7 +254,7 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
           <TabsContent value="quick" className="pt-4">
             <div className="flex items-end space-x-4">
               <div className="w-36 space-y-1">
-                <Label htmlFor="duration">Продолжительность</Label>
+                <Label htmlFor="duration">Общее время</Label>
                 <Input id="duration" value={quickDuration} onChange={(e) => setQuickDuration(e.target.value)} placeholder="Ч:ММ или Ч ММ" />
               </div>
               <div className="w-28 space-y-1">
@@ -226,96 +271,68 @@ const AddSessionForm: React.FC<AddSessionFormProps> = ({ day, onCancel }) => {
               <Button onClick={handleSave}>Сохранить</Button>
             </div>
           </TabsContent>
-          <TabsContent value="detailed" className="pt-4">
-            <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
-                {/* Time Method Group */}
-                <div className="flex flex-col space-y-2">
-                    <RadioGroup value={detailedTimeMethod} onValueChange={(v) => setDetailedTimeMethod(v as any)} className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="duration" id="r-duration" />
-                            <Label htmlFor="r-duration" className="font-normal">Продолжительность</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="specific" id="r-specific" />
-                            <Label htmlFor="r-specific" className="font-normal">Точное время</Label>
-                        </div>
-                    </RadioGroup>
+          <TabsContent value="detailed" className="pt-6">
+            <div className="flex flex-col space-y-4">
+              {/* Main Controls Grid */}
+              <div className="grid grid-cols-[170px_auto_auto_120px] gap-x-6 gap-y-2 items-start">
+                {/* --- ROW 1: LABELS --- */}
+                <div className="h-7 flex items-center"><Label>Общее время</Label></div>
+                <div className="h-7 flex items-center space-x-2">
+                  <Checkbox id="split-toggle" checked={isSplitEnabled} onCheckedChange={handleSplitToggle} />
+                  <Label htmlFor="split-toggle" className="font-normal select-none">Разбить на игра+селект</Label>
                 </div>
+                <div className="h-7 flex items-center space-x-2">
+                  <Checkbox id="exact-toggle" checked={isExactTimeEnabled} onCheckedChange={handleExactTimeToggle} />
+                  <Label htmlFor="exact-toggle" className="font-normal select-none">Точное время сессии</Label>
+                </div>
+                <div className="h-7 flex items-center"><Label>Руки</Label></div>
 
-                {/* Time Input Group */}
-                {detailedTimeMethod === 'duration' ? (
-                    <div className="space-y-1">
-                        <Label htmlFor="detailed-duration">Всего</Label>
-                        <Input id="detailed-duration" className="w-32" value={detailedDuration} onChange={(e) => setDetailedDuration(e.target.value)} placeholder="Ч:ММ" disabled={isBreakdownEnabled} />
+                {/* --- ROW 2: INPUTS --- */}
+                <div>
+                  <TimeSelector value={totalDurationSeconds} onChange={setTotalDurationSeconds} disabled={isSplitEnabled || isExactTimeEnabled} maxHours={48} />
+                </div>
+                
+                <div>
+                  {isSplitEnabled && (
+                    <div className="flex space-x-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Время игры</Label>
+                        <TimeSelector value={playDurationSeconds} onChange={setPlayDurationSeconds} maxHours={48} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Время селекта</Label>
+                        <TimeSelector value={selectDurationSeconds} onChange={setSelectDurationSeconds} maxHours={48} />
+                      </div>
                     </div>
-                ) : (
-                    <>
-                        <div className="space-y-1">
-                            <Label htmlFor="start-time">Старт</Label>
-                            <Input id="start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-                        </div>
-                        <div className="space-y-1">
-                            <Label htmlFor="end-time">Конец</Label>
-                            <Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-                        </div>
-                    </>
-                )}
+                  )}
+                </div>
 
-                {/* Breakdown Group */}
-                <div className="flex flex-col">
-                    <div className="flex items-center space-x-2 h-10">
-                        <Checkbox id="breakdown-toggle" checked={isBreakdownEnabled} onCheckedChange={(checked) => setIsBreakdownEnabled(Boolean(checked))} />
-                        <Label htmlFor="breakdown-toggle" className="font-normal">Разбить на Игра + Селект</Label>
+                <div>
+                  {isExactTimeEnabled && (
+                    <div className="flex space-x-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Старт</Label>
+                        <TimeSelector value={startTimeSeconds} onChange={setStartTimeSeconds} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Конец</Label>
+                        <TimeSelector value={endTimeSeconds} onChange={setEndTimeSeconds} />
+                      </div>
                     </div>
+                  )}
                 </div>
 
-                {isBreakdownEnabled && (
-                    <>
-                        <div className="space-y-1">
-                            <Label htmlFor="play-time">Время игры</Label>
-                            <Input id="play-time" className="w-28" value={playTime} onChange={(e) => setPlayTime(e.target.value)} placeholder="Ч:ММ" />
-                        </div>
-                        <div className="space-y-1">
-                            <Label htmlFor="select-time">Время селекта</Label>
-                            <Input id="select-time" className="w-28" value={selectTime} onChange={(e) => setSelectTime(e.target.value)} placeholder="Ч:ММ" />
-                        </div>
-                    </>
-                )}
-
-                {/* Hands Group */}
-                <div className="w-28 space-y-1">
-                    <Label htmlFor="detailed-hands">Руки</Label>
-                    <Input id="detailed-hands" type="number" min={0} value={detailedHands} onChange={(e) => setDetailedHands(e.target.value)} placeholder="(опц.)" />
+                <div>
+                  <Input id="detailed-hands" type="number" min={0} value={detailedHands} onChange={(e) => setDetailedHands(e.target.value)} placeholder="(опц.)" />
                 </div>
+              </div>
 
-                {/* Notes Group */}
-                <div className="flex-1 space-y-1 min-w-[150px]">
-                    <Label htmlFor="detailed-notes">Заметки</Label>
-                    <Input id="detailed-notes" value={detailedNotes} onChange={(e) => setDetailedNotes(e.target.value)} placeholder="(опц.)" />
-                </div>
-            </div>
-
-            {/* Validation & Info Messages */}
-            <div className="mt-2 flex flex-wrap items-start gap-x-6 min-h-[20px]">
-                <div className="min-w-[200px]">
-                    {detailedTimeMethod === 'specific' && calculatedDurationInSeconds > 0 && (
-                        <p className="text-sm text-primary-foreground/80">
-                            Продолжительность: <b>{formatSeconds(calculatedDurationInSeconds)}</b>
-                        </p>
-                    )}
-                </div>
-                <div className="min-w-[200px]">
-                    {isBreakdownInvalid && (
-                        <p className="text-sm text-destructive">
-                            Сумма не совпадает! ({formatSeconds(breakdownSumInSeconds)} из {formatSeconds(calculatedDurationInSeconds)})
-                        </p>
-                    )}
-                </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-6">
-              <Button variant="ghost" onClick={onCancel}>Отмена</Button>
-              <Button onClick={handleSave}>Сохранить</Button>
+              {/* Notes and Buttons Row */}
+              <div className="flex items-center gap-4 pt-4">
+                <Input id="detailed-notes" value={detailedNotes} onChange={(e) => setDetailedNotes(e.target.value)} placeholder="Заметки (опц.)" className="flex-1" />
+                <Button variant="ghost" onClick={onCancel}>Отмена</Button>
+                <Button onClick={handleSave}>Сохранить</Button>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
