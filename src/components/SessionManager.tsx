@@ -25,17 +25,17 @@ const SessionManager = ({}: SessionManagerProps) => {
     togglePeriod,
   } = useSession();
 
-  const handleStart = async () => {
-    await startSession();
+  const handleStart = () => {
+    startSession();
   };
 
-  const handleStop = async () => {
+  const handleStop = () => {
     console.log('Шаг 1: Кнопка "Остановить" нажата');
-    await stopSession();
+    stopSession();
   };
 
-  const handleTogglePeriod = async (newType: 'play' | 'select') => {
-    await togglePeriod(newType);
+  const handleTogglePeriod = (newType: 'play' | 'select') => {
+    togglePeriod(newType);
   };
 
   return (
