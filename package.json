@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -39,6 +40,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/supabase-js": "^2.43.4",
+    "@tauri-apps/api": "^1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -66,6 +68,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^1.5.14",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^20.12.12",
     "@types/react": "^18.2.66",
