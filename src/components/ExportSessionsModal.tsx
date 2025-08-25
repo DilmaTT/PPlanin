@@ -1,6 +1,5 @@
 import { useState } from 'react';
     import ExcelJS from 'exceljs';
-    import { saveAs } from 'file-saver';
     import { Settings } from 'lucide-react';
     import {
       Dialog,
@@ -32,6 +31,7 @@ import { useState } from 'react';
     import { ru } from 'date-fns/locale';
     import { useStorage } from '@/hooks/useStorage';
     import type { Session, SessionPeriod } from '@/types';
+    import { saveFile } from '@/lib/platform';
 
     // Define visible columns for the UI and general export structure
     const columns = [
@@ -419,7 +419,7 @@ import { useState } from 'react';
         try {
           const buffer = await workbook.xlsx.writeBuffer();
           const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-          saveAs(blob, 'poker-sessions.xlsx');
+          await saveFile('poker-sessions.xlsx', blob);
         } catch (error) {
           console.error("Error exporting Excel file:", error);
         }

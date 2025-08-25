@@ -6,6 +6,7 @@ import type { Settings, Session } from '@/types';
 import { read, utils } from 'xlsx';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ExportSessionsModal } from '@/components/ExportSessionsModal';
+import { saveFile } from '@/lib/platform';
 
 const DataPage = () => {
   const { sessions, settings, updateSettings, importSessions, resetAllData } = useStorage();
@@ -14,18 +15,11 @@ const DataPage = () => {
   const sessionsFileInputRef = useRef<HTMLInputElement>(null);
   const [isExportModal, setIsExportModal] = useState(false);
 
-  const handleSettingsExport = () => {
+  const handleSettingsExport = async () => {
     try {
       const settingsJson = JSON.stringify(settings, null, 2);
       const blob = new Blob([settingsJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'poker-tracker-settings.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await saveFile('poker-tracker-settings.json', blob);
       toast({
         title: 'Экспорт успешен',
         description: 'Ваши настройки были сохранены в файл.',
