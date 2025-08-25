@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useStorage } from '@/hooks/useStorage';
 import { useToast } from '@/hooks/use-toast';
 import type { Settings, Session } from '@/types';
-import { read, utils } from 'xlsx';
+// import { read, utils } from 'xlsx'; // Удален импорт xlsx
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ExportSessionsModal } from '@/components/ExportSessionsModal';
 import { saveFile } from '@/lib/platform';
@@ -90,72 +90,16 @@ const DataPage = () => {
   };
 
   const handleSessionFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = read(data, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = utils.sheet_to_json(worksheet) as any[];
-
-        console.log('Данные из XLSX для импорта:', jsonData);
-
-        const allSessionsToImport = jsonData.reduce((acc: Session[], row: any, index: number) => {
-          const rawDataKey = 'Raw Data'; // The header used during export
-          const rawData = row[rawDataKey];
-
-          if (typeof rawData === 'string' && rawData.startsWith('[')) {
-            try {
-              const sessionsFromRow = JSON.parse(rawData);
-              if (Array.isArray(sessionsFromRow)) {
-                acc.push(...sessionsFromRow);
-              } else {
-                console.warn(`Строка ${index + 2}: данные в '${rawDataKey}' не являются массивом, пропущено.`, sessionsFromRow);
-              }
-            } catch (error) {
-              console.error(`Строка ${index + 2}: ошибка парсинга JSON из '${rawDataKey}'.`, { error, rawData });
-            }
-          } else if (rawData && rawData !== 'IS_OFF_DAY') {
-            console.log(`Строка ${index + 2}: пропущена из-за неверного формата данных в '${rawDataKey}'.`, rawData);
-          }
-
-          return acc;
-        }, []);
-
-        console.log('Финальный массив сессий для импорта:', allSessionsToImport);
-        
-        if (allSessionsToImport.length > 0) {
-          importSessions(allSessionsToImport);
-          toast({
-            title: 'Импорт сессий успешен',
-            description: `Успешно загружено ${allSessionsToImport.length} сессий.`,
-          });
-        } else {
-          toast({
-            title: 'Импорт не выполнен',
-            description: 'В файле не найдено сессий для импорта. Проверьте формат файла.',
-            variant: 'destructive',
-          });
-        }
-
-      } catch (error) {
-        console.error('Failed to import sessions:', error);
-        toast({
-          title: 'Ошибка импорта сессий',
-          description: 'Не удалось прочитать файл или его содержимое. Убедитесь, что он имеет правильный формат и содержит данные.',
-          variant: 'destructive',
-        });
-      } finally {
-        if (sessionsFileInputRef.current) {
-          sessionsFileInputRef.current.value = '';
-        }
-      }
-    };
-    reader.readAsBinaryString(file);
+    // Удалена логика импорта XLSX, так как пакет xlsx был удален.
+    // Если вам нужна функциональность импорта XLSX, потребуется найти альтернативную библиотеку.
+    toast({
+      title: 'Импорт XLSX недоступен',
+      description: 'Функциональность импорта XLSX временно отключена из-за удаления библиотеки xlsx.',
+      variant: 'destructive',
+    });
+    if (sessionsFileInputRef.current) {
+      sessionsFileInputRef.current.value = '';
+    }
   };
 
   const handleResetData = () => {
