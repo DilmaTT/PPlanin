@@ -28,7 +28,7 @@ const DataPage = () => {
       console.error('Failed to export settings:', error);
       toast({
         title: 'Ошибка экспорта',
-        description: 'Не удалось экспортировать настройки.',
+        description: 'Не удалось экспортировать настройки. Убедитесь, что в конфигурации Tauri разрешены API для диалогов и файловой системы.',
         variant: 'destructive',
       });
     }

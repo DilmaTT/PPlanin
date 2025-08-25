@@ -422,6 +422,7 @@ import { useState } from 'react';
           await saveFile('poker-sessions.xlsx', blob);
         } catch (error) {
           console.error("Error exporting Excel file:", error);
+          alert('Ошибка экспорта: Не удалось сохранить файл. Подробности в консоли разработчика. Убедитесь, что в конфигурации Tauri разрешены API для диалогов и файловой системы.');
         }
 
         onClose();
