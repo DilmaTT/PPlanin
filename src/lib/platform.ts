@@ -27,14 +27,31 @@ export const saveFile = async (fileName: string, data: Blob): Promise<void> => {
       }
     } catch (error) {
       console.error("Ошибка сохранения файла в Tauri:", error);
-      // Показываем пользователю явное сообщение об ошибке, так как это частая проблема
-      alert(
-        'Не удалось вызвать диалог сохранения файла.\n\n' +
-        'Вероятная причина: API для диалогов или файловой системы не разрешены в конфигурации Tauri.\n\n' +
-        'Пожалуйста, проверьте ваш файл `tauri.conf.json` и убедитесь, что в секции `tauri.allowlist` разрешены `dialog` и `fs`.\n\n' +
-        `Подробности ошибки: ${error}`
-      );
-      // Перебрасываем ошибку, чтобы ее можно было поймать в вызывающей функции
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      let detailedMessage = 'Не удалось вызвать диалог сохранения файла.\n\n';
+
+      if (errorMessage.toLowerCase().includes('permission denied') || errorMessage.toLowerCase().includes('not allowed')) {
+        detailedMessage += 'Вероятная причина: API для диалогов или файловой системы не разрешены в конфигурации Tauri.\n\n' +
+                           'Пожалуйста, проверьте ваш файл `src-tauri/tauri.conf.json` и убедитесь, что в секции `tauri.allowlist` прописаны точные разрешения. Пример правильной конфигурации:\n\n' +
+                           '"allowlist": {\n' +
+                           '  "dialog": {\n' +
+                           '    "save": true\n' +
+                           '  },\n' +
+                           '  "fs": {\n' +
+                           '    "writeBinaryFile": true\n' +
+                           '  }\n' +
+                           '}';
+      } else {
+        detailedMessage += 'Произошла непредвиденная ошибка. Возможные причины:\n' +
+                           '- Не установлены пакеты `@tauri-apps/api`.\n' +
+                           '- Несоответствие версий между `@tauri-apps/api`, `tauri-cli` и зависимостями Rust.\n' +
+                           '- Проблема с конфигурацией сборщика (Vite).\n';
+      }
+
+      detailedMessage += `\n\nПодробности системной ошибки: ${errorMessage}`;
+
+      alert(detailedMessage);
       throw error;
     }
   } else {

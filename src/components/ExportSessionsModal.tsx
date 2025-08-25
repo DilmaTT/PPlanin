@@ -121,9 +121,6 @@ import { useState } from 'react';
       };
 
       const handleExport = async () => {
-        // Шаг 1: Получено сессий
-        console.log('Шаг 1: Получено сессий:', sessions);
-
         // 1. Determine date range
         let startDate = new Date();
         let endDate = new Date();
@@ -149,9 +146,6 @@ import { useState } from 'react';
           acc[dayKey].push(session);
           return acc;
         }, {} as Record<string, Session[]>);
-
-        // Шаг 2: Отфильтрованные сессии (сгруппированные по дням)
-        console.log('Шаг 2: Отфильтрованные сессии (сгруппированные по дням):', groupedByDay);
 
         // 3. Prepare data for ExcelJS, including raw data for calculations
         const formattedData = dateRange.map(currentDate => {
@@ -188,7 +182,6 @@ import { useState } from 'react';
 
           // Populate formatted data for display
           columns.forEach(col => {
-            // ... (switch case for each column)
             switch (col.id) {
               case 'date': row[col.id] = formattedDate; break;
               case 'sessionCount': row[col.id] = daySessions.length > 0 ? daySessions.length : ''; break;
@@ -245,7 +238,7 @@ import { useState } from 'react';
           };
 
           if (row._raw.isOffDay) {
-            row['rawData'] = 'IS_OFF_DAY';
+            row.rawData = 'IS_OFF_DAY';
             let isSecondColumn = true;
             columns.forEach(col => {
               if (col.id !== 'date') {
@@ -254,14 +247,11 @@ import { useState } from 'react';
               }
             });
           } else {
-            row['rawData'] = JSON.stringify(daySessions);
+            row.rawData = Array.isArray(daySessions) ? JSON.stringify(daySessions) : '[]';
           }
 
           return row;
         });
-
-        // Шаг 3: Данные для экспорта
-        console.log('Шаг 3: Данные для экспорта:', formattedData);
 
         // Define descriptionRowData and totalsRowData here if showTotals is true
         let descriptionRowData: Record<string, string> = {};
@@ -281,7 +271,6 @@ import { useState } from 'react';
               acc.selectTime += row._raw.totalSelectTimeInSeconds;
               acc.hands += row._raw.totalHandsPlayed;
               acc.planHands += row._raw.goalHands;
-              // Only sum hands/hr for days with actual play time to avoid skewing the average
               if (row._raw.totalPlayTimeInSeconds > 0) {
                 acc.handsPerHourSum += row._raw.handsPerHour;
                 acc.daysWithPlayTime++;
@@ -318,11 +307,13 @@ import { useState } from 'react';
               hands: 'Всего рук',
               planHands: 'Кол-во рук по плану',
               handsPerHour: 'среднее рук/час',
-              notes: '', // Explicitly empty for notes
-              sessionDateTime: '', // Explicitly empty for sessionDateTime
+              notes: '',
+              sessionDateTime: '',
             };
           }
         }
+        
+        console.log('Данные для экспорта (перед созданием XLSX):', { formattedData, totalsRowData, descriptionRowData });
 
         // 4. Create workbook and worksheet
         const workbook = new ExcelJS.Workbook();
@@ -331,36 +322,25 @@ import { useState } from 'react';
         // 5. Define columns for ExcelJS, calculating width dynamically
         const dataForWidthCalculation = formattedData.filter(row => !row._raw.isOffDay);
         const excelColumns = columns.filter(col => selectedColumns[col.id]).map(col => {
-          const headerText = `  ${col.label}  `; // The actual header string with padding
-          let maxWidth = 0;
+          const headerText = `  ${col.label}  `;
+          let maxWidth = headerText.length;
 
           if (showTotals && descriptionRowData[col.id] !== undefined) {
-            // If showTotals is true, start with the length of the description row cell
-            maxWidth = String(descriptionRowData[col.id]).length;
-          } else {
-            // Otherwise, start with the length of the header text
-            maxWidth = headerText.length;
+            maxWidth = Math.max(maxWidth, String(descriptionRowData[col.id]).length);
           }
 
           dataForWidthCalculation.forEach(row => {
             const cellValue = row[col.id];
             if (cellValue !== null && cellValue !== undefined) {
-              const cellString = String(cellValue);
-              if (cellString.length > maxWidth) {
-                maxWidth = cellString.length;
-              }
+              maxWidth = Math.max(maxWidth, String(cellValue).length);
             }
           });
 
-          // Also compare with totalsRowData if showTotals is true and totalsRowData exists for this column
           if (showTotals && totalsRowData[col.id] !== undefined && totalsRowData[col.id] !== null) {
-            const totalsCellString = String(totalsRowData[col.id]);
-            if (totalsCellString.length > maxWidth) {
-              maxWidth = totalsCellString.length;
-            }
+            maxWidth = Math.max(maxWidth, String(totalsRowData[col.id]).length);
           }
 
-          return { header: headerText, key: col.id, width: maxWidth + 2 }; // Add 2 for extra padding for data cells
+          return { header: headerText, key: col.id, width: maxWidth + 2 };
         });
 
         excelColumns.push({ header: 'Raw Data', key: 'rawData', width: 10 });
@@ -372,9 +352,8 @@ import { useState } from 'react';
 
         // 7. Calculate and add totals if enabled
         if (showTotals) {
-          const playingDaysCount = formattedData.filter(row => !row._raw.isOffDay).length; // Recalculate playingDaysCount
-
-          if (playingDaysCount > 0) { // Only add totals if there are playing days
+          const playingDaysCount = formattedData.filter(row => !row._raw.isOffDay).length;
+          if (playingDaysCount > 0) {
             worksheet.addRow([]); // Spacer row
             const totalsRow = worksheet.addRow(totalsRowData);
             totalsRow.font = { bold: true };
@@ -388,9 +367,8 @@ import { useState } from 'react';
 
         // 8. Apply styles to data rows
         worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-          // Adjust rowNumber check to account for potential totals and description rows
-          const totalRowsAdded = showTotals && formattedData.filter(row => !row._raw.isOffDay).length > 0 ? 3 : 0;
-          if (rowNumber > worksheet.rowCount - totalRowsAdded) return; // Skip total and description rows
+          const totalRowsAdded = showTotals && formattedData.filter(r => !r._raw.isOffDay).length > 0 ? 3 : 0;
+          if (rowNumber > worksheet.rowCount - totalRowsAdded) return;
 
           row.eachCell({ includeEmpty: true }, (cell) => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -402,14 +380,15 @@ import { useState } from 'react';
             const rawDataCell = row.getCell('rawData');
             if (rawDataCell && rawDataCell.value === 'IS_OFF_DAY') {
               const visibleColumns = worksheet.columns.filter(c => !c.hidden);
-              for (let i = 2; i <= visibleColumns.length; i++) {
-                const cell = row.getCell(i);
-                if (cell) {
-                  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'ffe3ea' } };
-                }
-              }
               if (visibleColumns.length > 1) {
-                worksheet.mergeCells(`${visibleColumns[1].letter}${rowNumber}:${visibleColumns[visibleColumns.length - 1].letter}${rowNumber}`);
+                const firstVisibleCol = visibleColumns[1];
+                const lastVisibleCol = visibleColumns[visibleColumns.length - 1];
+                worksheet.mergeCells(`${firstVisibleCol.letter}${rowNumber}:${lastVisibleCol.letter}${rowNumber}`);
+                const mergedCell = row.getCell(firstVisibleCol.key as string);
+                if (mergedCell) {
+                  mergedCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'ffe3ea' } };
+                  mergedCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                }
               }
             }
           }
@@ -422,7 +401,6 @@ import { useState } from 'react';
           await saveFile('poker-sessions.xlsx', blob);
         } catch (error) {
           console.error("Error exporting Excel file:", error);
-          alert('Ошибка экспорта: Не удалось сохранить файл. Подробности в консоли разработчика. Убедитесь, что в конфигурации Tauri разрешены API для диалогов и файловой системы.');
         }
 
         onClose();

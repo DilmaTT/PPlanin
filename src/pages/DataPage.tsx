@@ -26,11 +26,7 @@ const DataPage = () => {
       });
     } catch (error) {
       console.error('Failed to export settings:', error);
-      toast({
-        title: 'Ошибка экспорта',
-        description: 'Не удалось экспортировать настройки. Убедитесь, что в конфигурации Tauri разрешены API для диалогов и файловой системы.',
-        variant: 'destructive',
-      });
+      // The alert is now handled inside saveFile
     }
   };
 
@@ -106,44 +102,45 @@ const DataPage = () => {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = utils.sheet_to_json(worksheet) as any[];
 
-        // Шаг 1: Данные из XLSX
-        console.log('Шаг 1: Данные из XLSX:', jsonData);
+        console.log('Данные из XLSX для импорта:', jsonData);
 
-        const allSessionsToImport = jsonData.reduce((acc: Session[], row: any) => {
-          console.log('Итерация reduce. Текущая строка:', row);
-
-          // ИСПРАВЛЕНО: Используем ключ 'Raw Data' или 'RawData'
-          // sheet_to_json может преобразовать "Raw Data" в "Raw Data" или "RawData"
-          // Проверим оба варианта или используем более надежный способ
-          const rawData = row['Raw Data'] || row['RawData']; 
-          console.log('Значение из колонки "Raw Data":', rawData);
+        const allSessionsToImport = jsonData.reduce((acc: Session[], row: any, index: number) => {
+          const rawDataKey = 'Raw Data'; // The header used during export
+          const rawData = row[rawDataKey];
 
           if (typeof rawData === 'string' && rawData.startsWith('[')) {
-            console.log('Условие пройдено! Пытаюсь парсить JSON.');
             try {
               const sessionsFromRow = JSON.parse(rawData);
-              // Убедимся, что sessionsFromRow - это массив, даже если он содержит одну сессию
               if (Array.isArray(sessionsFromRow)) {
                 acc.push(...sessionsFromRow);
-              } else if (sessionsFromRow && typeof sessionsFromRow === 'object') {
-                // Если это один объект сессии, обернем его в массив
-                acc.push(sessionsFromRow);
+              } else {
+                console.warn(`Строка ${index + 2}: данные в '${rawDataKey}' не являются массивом, пропущено.`, sessionsFromRow);
               }
             } catch (error) {
-              console.error('Ошибка парсинга JSON:', error);
+              console.error(`Строка ${index + 2}: ошибка парсинга JSON из '${rawDataKey}'.`, { error, rawData });
             }
+          } else if (rawData && rawData !== 'IS_OFF_DAY') {
+            console.log(`Строка ${index + 2}: пропущена из-за неверного формата данных в '${rawDataKey}'.`, rawData);
           }
 
           return acc;
         }, []);
 
-        // Шаг 3: Финальный массив для сохранения
-        console.log('Шаг 3: Финальный массив для сохранения:', allSessionsToImport);
-        importSessions(allSessionsToImport);
-        toast({
-          title: 'Импорт сессий успешен',
-          description: `Успешно загружено ${allSessionsToImport.length} сессий.`,
-        });
+        console.log('Финальный массив сессий для импорта:', allSessionsToImport);
+        
+        if (allSessionsToImport.length > 0) {
+          importSessions(allSessionsToImport);
+          toast({
+            title: 'Импорт сессий успешен',
+            description: `Успешно загружено ${allSessionsToImport.length} сессий.`,
+          });
+        } else {
+          toast({
+            title: 'Импорт не выполнен',
+            description: 'В файле не найдено сессий для импорта. Проверьте формат файла.',
+            variant: 'destructive',
+          });
+        }
 
       } catch (error) {
         console.error('Failed to import sessions:', error);
